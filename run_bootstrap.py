@@ -10,7 +10,7 @@ import xarray as xr
 
 import constants as c
 import b_bootstrap as b
-import confess_routines as cr
+import generic_routines as cr
 ###############################################################################
 def bootstrap(lead_exp,season):
     ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc', chunks={'lon':'auto','lat':'auto'})

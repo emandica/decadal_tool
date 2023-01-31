@@ -8,8 +8,8 @@ Created on Thu Jan 26 11:17:14 2023
 import xarray as xr
 
 import constants as c
-import a_open_dataset as od
-import confess_routines as cr
+import open_dataset as od
+import generic_routines as cr
 
 ###############################################################################
 def aggr_datasets(lead_exp, season):

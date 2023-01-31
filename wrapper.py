@@ -7,7 +7,7 @@ Created on Mon Jan 23 16:58:41 2023
 """
 import argparse
 
-import confess_routines as cr
+import generic_routines as cr
 
 import constants as c
 

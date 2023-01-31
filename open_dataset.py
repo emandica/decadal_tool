@@ -6,7 +6,7 @@ Created on Wed Jan 18 11:47:05 2023
 @author: ema
 """
 import xarray as xr
-import confess_routines as ncr
+import generic_routines as ncr
 import constants as c
 
 def open_dataset_and_seasonal_selection(lead_exp, season):
