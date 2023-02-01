@@ -21,7 +21,10 @@ def bootstrap(lead_exp,season):
         sens = b.block_bootstrap(sens,1000)
     
         ctl.to_netcdf(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap.nc')
+        ctl.close()
+        
         sens.to_netcdf(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap.nc')
+        sens.close()
         
     elif c.BOOTSTRAP=='standard':        
         
@@ -31,7 +34,9 @@ def bootstrap(lead_exp,season):
         
         dset1= b.standard_bootstrap(dset,1000)
         dset1.to_netcdf(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_standard.nc')
+        dset1.close(9)
         
         dset2= b.standard_bootstrap(dset,1000)
         dset2.to_netcdf(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_standard.nc')
+        dset2.close()
     
