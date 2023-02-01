@@ -29,12 +29,12 @@ Load datasets
     if c.REF=='era':
         ref = ncr.open_era5(c.DIRECTORY_ERA, c.FILE_ERA, c.VAR)
         ref = ref.sel(time=slice(ctl.time[0].dt.strftime("%Y-%m"),
-                                           ref.time[-1].dt.strftime("%Y-%m")))
+                                 ref.time[-1].dt.strftime("%Y-%m")))
         
     elif c.REF == 'hadcrut':
         ref = ncr.open_hadcrut(c.DIRECTORY_OBS, c.FILE_OBS, c.VAR)
         ref = ref.sel(time=slice(ctl.time[0].dt.strftime("%Y-%m"),
-                                           ref.time[-1].dt.strftime("%Y-%m")))
+                                 ref.time[-1].dt.strftime("%Y-%m")))
         
     """
 get variables
