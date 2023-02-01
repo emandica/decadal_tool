@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 import constants as c
 
-import confess_routines as cr
+import generic_routines as cr
 
 import plot as pl
 
