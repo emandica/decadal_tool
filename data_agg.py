@@ -33,6 +33,9 @@ def aggr_datasets(lead_exp, season):
 #%% synchronize time
     ref = cr.align_time(ctl, ref)
     
+    
+    ctl = ctl.sel(time=sens.time)
+    ref = ref.sel(time=sens.time)
 #%%    
     """
     anomaly calculation
@@ -47,3 +50,10 @@ def aggr_datasets(lead_exp, season):
     ctl.to_netcdf(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc')
     sens.to_netcdf(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc')
     ref.to_netcdf(c.RUN_DIR+c.REF+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc')
+    
+    """
+    close file
+    """
+    ctl.close()
+    sens.close()
+    ref.close()
