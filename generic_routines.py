@@ -14,7 +14,7 @@ import constants as c
 ###############################################################################
 ###FUNCTIONS TO OPEN FILES###
 ###############################################################################
-def open_dataset(path, lead, member_number, time_start, time_end, no_member=False):
+def open_dataset(path, lead, member_number, time_start, no_member=False):
     """opens netcdf files. Separate ensamble members are concatenate
     Args:
         path (str): path to data (data should be aggregated by lead time)
@@ -55,17 +55,19 @@ def lead_aggregation(lead, var, number, name,t_start, t_end, no_member):
         
         date_start = str(time_start)+"-11"
         date_end = str(time_end)+"-10"
-
-        if flag == 0:
-            time_ax = pd.date_range(start=str(date_start), end=str(date_end), freq='MS')
-            flag = 1
         
         path = c.FILE_DIR+name+"/"+var+"/lead_"+str(sub_lead)+"/"
 
         dset = open_dataset(path, sub_lead, number,
-                            time_start=date_start, time_end=date_end,
+                            time_start=date_start,
                             no_member=no_member)
+        
+        if flag == 0:
+            time_ax = pd.date_range(start=str(date_start), end=pd.to_datetime(dset.time.dt.strftime("%Y-%m"))[-1], freq='MS')
+            flag = 1
+            
         dset['time']=time_ax
+        
         ancillary.append(dset)
 
     dset = xr.concat(ancillary, dim='lead',)
