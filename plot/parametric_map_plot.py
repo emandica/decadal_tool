@@ -33,12 +33,11 @@ def parametric_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
     ds = ds.where((ds_sign <= 0.1) | (ds_sign >= 0.9))
     neg = np.where(ds_sign <= min_v)
     pos = np.where(ds_sign >= max_v)
-    if c.BOOTSTRAP == 'block':
-        lons, lats = np.meshgrid(ds.lon, ds.lat)    
-    elif c.BOOTSTRAP == 'standard':
-        lons, lats = np.meshgrid(ds.lon, ds.lat)
-        neg = [neg[1],neg[0]]
-        pos = [pos[1],pos[0]]
+    lons, lats = np.meshgrid(ds.lon, ds.lat)    
+    
+# to use for correlation, to comment for bias
+    neg = (neg[1],neg[0])
+    pos = (pos[1],pos[0])
     
 #%%plot fields
     fig = plt.figure(figsize=[12,8])

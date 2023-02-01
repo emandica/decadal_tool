@@ -54,8 +54,8 @@ def acc_significance(lead_exp,season):
         ctl =ctl.mean('member')
         sens =sens.mean('member')
         
-        corr_ctl = xs.pearson_r_eff_p_value(ctl,ref,dim='time',keep_attrs=True)#xr.corr(dset1[c.VAR], ref[c.VAR], dim='time')
-        corr_sens = xs.pearson_r_eff_p_value(sens,ref,dim='time',keep_attrs=True)#xr.corr(dset2[c.VAR], ref[c.VAR], dim='time')
+        corr_ctl = xs.pearson_r_eff_p_value(ctl, ref, dim='time',keep_attrs=True)
+        corr_sens = xs.pearson_r_eff_p_value(sens, ref, dim='time',keep_attrs=True)
         
         """
         save file
