@@ -7,26 +7,29 @@ Created on Tue Nov 29 20:43:24 2022
 """
 ###constants definitiontion
 ###exoperiments data
-NAME_SENS =
-NAME_CTL =
-T_START =
-SENS_NUMBER =
-CTL_NUMBER =
-T_END =
+NAME_SENS = 
+NAME_CTL = 
+T_START = 
+SENS_NUMBER = 
+CTL_NUMBER = 
 VAR =
 UNITS =
+DIM =
+PLEV =
+
 
 ###calculation information
-no_member = #member to exclude
+no_member = [0] #member to exclude
+
 
 ###flag for reference
-REF =
+REF = 'era'
 
 if REF == 'era':
     """era5"""
     ERA_VAR =
     DIRECTORY_ERA =
-    FILE_ERA = ERA_VAR+""
+    FILE_ERA =
 
 elif REF == 'hadcrut':
     """Observations"""
@@ -40,13 +43,15 @@ RUN_DIR =
 
 OUT_DIR =
 
-#LAND_FILE = '/mnt/d/dataset/02-confess/03-confess_data/a52o/land/fc00_lead_0_r.nc'
-
 ###############################################################################
 ###flags for diagnostics###
 ###############################################################################
 #mean bias
-M_BIAS = True
+M_BIAS = False
+
+##############################################################################
+#crossection
+XSECT = False
 
 ###############################################################################
 #correlation
