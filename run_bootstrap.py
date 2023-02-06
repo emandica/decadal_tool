@@ -12,9 +12,7 @@ import constants as c
 import b_bootstrap as b
 import generic_routines as cr
 ###############################################################################
-def bootstrap(lead_exp,season):
-    ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc', chunks={'lon':'auto','lat':'auto'})
-    sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc', chunks={'lon':'auto','lat':'auto'})
+def bootstrap(ctl, sens, lead_exp, season):
     
     if c.BOOTSTRAP=='block':
         ctl = b.block_bootstrap(ctl,1000)

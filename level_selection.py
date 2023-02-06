@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Jan 27 13:15:40 2023
+Created on Mon Feb  6 13:16:21 2023
 
 @author: ema
 """
@@ -9,9 +9,7 @@ import xarray as xr
 
 import constants as c
 
-#import confess_routines as cr
-
-def m_bias(lead_exp,season):
+def level_sel(lead_exp,season):
     """
     open dataset
     """
@@ -26,21 +24,7 @@ def m_bias(lead_exp,season):
         ctl = ctl.sel(plev = c.PLEV*100)
         sens = sens.sel(plev = c.PLEV*100)
         ref = ref.sel(plev = c.PLEV*100)
-#    """
-#    ensemble mean
-#    """
-#    ctl = ctl.mean('member')
-#    sens = sens.mean('member')
-#    """
-#    time mean
-#    """
-#    ctl = ctl.mean('time')
-#    sens = sens.mean('time')
-#    ref = ref.mean('time')
-    
-#    ctl = ctl - ref
-#    sens = sens - ref
-    
+        
     """
     save mean bias
     """

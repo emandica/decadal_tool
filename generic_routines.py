@@ -30,14 +30,14 @@ def open_dataset(path, lead, member_number, time_start, no_member=False):
             print('member '+str(member)+' is ignored')
         else:
             name = "r"+str(member)+"_lead_"+str(lead)+"_r.nc"
-            data = xr.open_dataset(path+name,chunks={'latitude':'auto', 'longitude':'auto'})
+            data = xr.open_dataset(path+name,chunks='auto')
             ancillary.append(data)
     data= xr.concat(ancillary, dim='member')
     data = data.sel(time=slice(time_start, data.time[-1]))
     return data
 
 ###############################################################################
-def lead_aggregation(lead, var, number, name,t_start, t_end, no_member):
+def lead_aggregation(lead, var, number, name,t_start, no_member):
     """ aggregates the lead times
     Args:
         lead(): lead year
@@ -51,10 +51,8 @@ def lead_aggregation(lead, var, number, name,t_start, t_end, no_member):
     for sub_lead in lead:
         
         time_start = t_start+sub_lead
-        time_end = t_end+sub_lead
         
         date_start = str(time_start)+"-11"
-        date_end = str(time_end)+"-10"
         
         path = c.FILE_DIR+name+"/"+var+"/lead_"+str(sub_lead)+"/"
 
@@ -191,4 +189,44 @@ def align_time(dset,ref):
     return ref
 
 ###############################################################################
+def cross_section(dset):
+    """
+    ensemble mean
+    """
+#    if 'member' in dset.dims:
+#        dset = dset.mean('member')    
     
+    """
+    time mean
+    """
+    #dset = dset.mean('time')
+    
+    """
+    lat average
+    """
+    LatIndexer = 'lat'
+    weights = np.cos(np.deg2rad(dset.lat))
+    weights.name = "weights"
+    
+    dset = dset.sel(**{LatIndexer: slice(-15,0)}).weighted(weights).mean(LatIndexer)
+    
+    return dset
+
+###############################################################################
+def convert_longitudes(ds, lon_name):
+# Adjust lon values to make sure they are within (-180, 180)
+    ds['_longitude_adjusted'] = xr.where(
+        ds[lon_name] > 180,
+        ds[lon_name] - 360,
+        ds[lon_name])
+
+# reassign the new coords to as the main lon coords
+# and sort DataArray using new coordinate values
+    ds = (
+        ds
+        .swap_dims({lon_name: '_longitude_adjusted'})
+        .sel(**{'_longitude_adjusted': sorted(ds._longitude_adjusted)})
+        .drop(lon_name))
+
+    ds = ds.rename({'_longitude_adjusted': lon_name})
+    return ds

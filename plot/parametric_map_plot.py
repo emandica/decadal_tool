@@ -30,14 +30,13 @@ def parametric_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
         min_v = 0.10
         max_v = 0.90
         
-    ds = ds.where((ds_sign <= 0.1) | (ds_sign >= 0.9))
-    neg = np.where(ds_sign <= min_v)
-    pos = np.where(ds_sign >= max_v)
+    #ds = ds.where((ds_sign <= 0.1) | (ds_sign >= 0.9))
+    neg = np.where((ds_sign <= min_v)|(ds_sign >= max_v))
     lons, lats = np.meshgrid(ds.lon, ds.lat)    
     
 # to use for correlation, to comment for bias
     neg = (neg[1],neg[0])
-    pos = (pos[1],pos[0])
+    #pos = (pos[1],pos[0])
     
 #%%plot fields
     fig = plt.figure(figsize=[12,8])
@@ -49,7 +48,7 @@ def parametric_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
                    )
     
     _ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
-    _ = ax.scatter(lons[pos], lats[pos], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
+#    _ = ax.scatter(lons[pos], lats[pos], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
     
     #add coastlines
     ax.coastlines()

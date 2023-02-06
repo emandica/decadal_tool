@@ -15,13 +15,13 @@ def open_dataset_and_seasonal_selection(lead_exp, season):
 Load datasets
     """    
     ctl = ncr.lead_aggregation(lead_exp, c.VAR, c.CTL_NUMBER, c.NAME_CTL,
-                               c.T_START,c.T_END,
+                               c.T_START,
                                no_member=c.no_member,
                                )
     print('aggregation ctl: OK')
     
     sens = ncr.lead_aggregation(lead_exp, c.VAR, c.SENS_NUMBER, c.NAME_SENS,
-                                c.T_START,c.T_END,
+                                c.T_START,
                                 no_member=c.no_member,
                                 )
     print('aggregation sens: OK')
@@ -35,6 +35,7 @@ Load datasets
         ref = ncr.open_hadcrut(c.DIRECTORY_OBS, c.FILE_OBS, c.VAR)
         ref = ref.sel(time=slice(ctl.time[0].dt.strftime("%Y-%m"),
                                  ref.time[-1].dt.strftime("%Y-%m")))
+    print('reference: OK')        
         
     """
 get variables
