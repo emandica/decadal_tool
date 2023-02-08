@@ -29,7 +29,7 @@ def bootstrap_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
         min_v = 2
         max_v = -3
         
-    ds = ds.where((ds[c.VAR] <= ds_sign[c.VAR][2,:,:]) | (ds[c.VAR] >= ds_sign[c.VAR][-3,:,:]))
+    #ds = ds.where((ds[c.VAR] <= ds_sign[c.VAR][2,:,:]) | (ds[c.VAR] >= ds_sign[c.VAR][-3,:,:]))
     neg = np.where(ds[c.VAR] <= ds_sign[c.VAR][min_v,:,:])
     pos = np.where(ds[c.VAR] >= ds_sign[c.VAR][max_v,:,:])
     lons, lats = np.meshgrid(ds.lon, ds.lat) 
@@ -48,7 +48,7 @@ def bootstrap_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
     
     #add coastlines
     ax.coastlines()
-    ax.set_ylim(-60,90)
+    #ax.set_ylim(-60,90)
     # add separate colorbar
     cb = plt.colorbar(p, ticks=levels, shrink=0.6, extend='both',)
     cb.ax.tick_params(labelsize=18)

@@ -36,7 +36,6 @@ def parametric_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
     
 # to use for correlation, to comment for bias
     neg = (neg[1],neg[0])
-    #pos = (pos[1],pos[0])
     
 #%%plot fields
     fig = plt.figure(figsize=[12,8])
@@ -48,11 +47,10 @@ def parametric_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
                    )
     
     _ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
-#    _ = ax.scatter(lons[pos], lats[pos], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
     
     #add coastlines
     ax.coastlines()
-    ax.set_ylim(-60,90)
+    #ax.set_ylim(-60,90)
     # add separate colorbar
     cb = plt.colorbar(p, ticks=levels, shrink=0.6, extend='both',)
     cb.ax.tick_params(labelsize=18)

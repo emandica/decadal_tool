@@ -90,7 +90,7 @@ def open_era5(directory, file, variable):
     elif variable == 'z':
         era5_var = era5_var.rename({'zg': 'z'})
     elif variable == 'psl':
-        era5_var = era5_var.rename({'sp': 'psl'})
+        era5_var = era5_var.rename({'msl': 'psl'})
     return era5_var
 
 ###############################################################################

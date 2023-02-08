@@ -37,23 +37,27 @@ def bias_plot(lead_exp, season):
     sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_MBIAS.nc')
     p_ctl = xr.open_dataarray(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bias_p_'+c.REF+'.nc')
     p_sens = xr.open_dataarray(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bias_p_'+c.REF+'.nc')
-    
+    ref = xr.open_dataset(c.RUN_DIR+c.REF+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc')    
+    ref = ref.mean('time')
     delta = sens - ctl    
-    
-#%%    
-#    levels1=[-2.5,-2,-1.5,-1,-0.5,0,0.5,1,1.5,2,2.5]
-    #levels2=[-5,-4,-3,-2,-1,0,1,2,3,4,5]
-    levels1=[-1.5,-1,-0.5,0,0.5,1,1.5]
-    levels2=[-60,-50,-40,-30,-20,-10,0,10,20,30,40,50,60]
+    ctl = ctl-ref
+    sens=sens-ref
+#%% 
+    #%%tas   
+    #levels1=[-5,-4,-3,-2,-1,0,1,2,3,4,5]
+    #levels2=[-2.5,-2,-1.5,-1,-0.5,0.,0.5,1,1.5,2,2.5]
+    #%%psl
+    levels1=[-300,-250,-200,-150,-100,-50,0,50,100,150,200,250,300]
+    levels2=[-120,-100,-80,-60,-40,-20,0,20,40,60,80,100,120]
     
     title=c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
-    pl.parametric_map_plot(ctl,p_ctl,levels=levels2,title=title, sign=0.95)
+    pl.parametric_map_plot(ctl,p_ctl,levels=levels1,title=title, sign=0.95)
     plt.savefig(c.OUT_DIR + c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '.jpg', dpi=300, bbox_inches='tight')
     
     title=c.NAME_SENS+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
-    pl.parametric_map_plot(sens,p_sens,levels=levels2,title=title,sign=0.95)
+    pl.parametric_map_plot(sens,p_sens,levels=levels1,title=title,sign=0.95)
     plt.savefig(c.OUT_DIR + c.NAME_SENS+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '.jpg', dpi=300, bbox_inches='tight')
     
     title=c.NAME_SENS+'-'+c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
-    pl.bootstrap_map_plot(delta,sign_delta,levels=levels1,title=title, sign = 0.95)
+    pl.bootstrap_map_plot(delta,sign_delta,levels=levels2,title=title, sign = 0.95)
     plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+'_' + c.REF + '.jpg', dpi=300, bbox_inches='tight')    

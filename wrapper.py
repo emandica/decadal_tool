@@ -15,6 +15,7 @@ import xsection as xs
 import constants as c
 
 import data_agg as da
+import data_agg_corr as da_cor
 
 import run_bootstrap as rb
 
@@ -41,17 +42,18 @@ if __name__ == '__main__':
 
     args=CLI.parse_args()
 
-    season = 'DJF' #args.SEASON
+    season = 'Clim' #args.SEASON
     lead_exp = [3,4] #args.LEAD_LIST
-
-#%%data aggregation 
-    print('starting data aggregation')
-    
-    da.aggr_datasets(lead_exp, season)
-    print('data aggregation: OK')
 
 #%%xsection
     if c.XSECT:
+        #%%data aggregation 
+        print('starting data aggregation')
+            
+        da.aggr_datasets(lead_exp, season)
+        print('data aggregation: OK')
+        
+        
         print('starting crossection')
         
         xs.xsection(lead_exp, season)
@@ -76,11 +78,15 @@ if __name__ == '__main__':
         
 #%%Mean bias
     if c.M_BIAS:
+        #%%data aggregation
+        print('starting data aggregation')
+            
+        da.aggr_datasets(lead_exp, season)
+        print('data aggregation: OK')
+        
         
         print('starting mean bias')        
         ls.level_sel(lead_exp, season)
-        #mb.m_bias(lead_exp, season)
-        #print('ensemble mean bias: OK')
        
         #%%bootstrap
         ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
@@ -105,15 +111,20 @@ if __name__ == '__main__':
                 
 #%%Correlation
     if c.CORRELATION:
+        #%%data aggregation
+        print('starting data aggregation')
+            
+        da_cor.aggr_datasets(lead_exp, season)
+        print('data aggregation: OK')
+        
         
         print('starting correlation')
-
+        #%%level selection
         ls.level_sel(lead_exp, season)
         
-        #%%bootstrap
         ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
         sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
-        
+        #%%bootstrap
         rb.bootstrap(ctl,sens,lead_exp,season)
         
         ctl.close()

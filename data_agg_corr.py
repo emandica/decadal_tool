@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Tue Feb  7 11:57:27 2023
+Created on Thu Jan 26 11:17:14 2023
 
 @author: ema
 """
-
 import xarray as xr
 
 import constants as c
@@ -22,6 +21,12 @@ def aggr_datasets(lead_exp, season):
     ctl, sens, ref = od.open_dataset_and_seasonal_selection(lead_exp, season)
 
 #%%
+    """
+    anomaly calculation
+    """
+    ctl = ctl - ctl.mean('member').mean('time')
+    sens = sens - sens.mean('member').mean('time')
+    ref = ref - ref.mean('time')
     """
     lead mean
     """
@@ -51,3 +56,4 @@ def aggr_datasets(lead_exp, season):
     ctl.close()
     sens.close()
     ref.close()
+    
