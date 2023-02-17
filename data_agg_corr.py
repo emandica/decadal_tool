@@ -24,9 +24,9 @@ def aggr_datasets(lead_exp, season):
     """
     anomaly calculation
     """
-    ctl = ctl - ctl.mean('member').mean('time')
-    sens = sens - sens.mean('member').mean('time')
-    ref = ref - ref.mean('time')
+    ctl = ctl - ctl.sel(time=slice('1999', '2014')).mean('member').mean('time')
+    sens = sens - sens.sel(time=slice('1999', '2014')).mean('member').mean('time')
+    ref = ref - ref.sel(time=slice('1999', '2014')).mean('time')
     """
     lead mean
     """

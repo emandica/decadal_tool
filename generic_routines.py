@@ -79,7 +79,7 @@ def open_era5(directory, file, variable):
         file():
         variable():
     """
-    era5_var = xr.open_dataset(directory+file)
+    era5_var = xr.open_dataset(directory+file,chunks='auto')
     if variable == 'pr':
         era5_var = era5_var.rename({'tp': 'pr'})
         era5_var = era5_var*1000
@@ -139,12 +139,6 @@ season selection, Clim is the yearly mean
     ctl = dataset_season(ctl, season)
     sens = dataset_season(sens, season)
     era5_var = dataset_season(era5_var, season)
-
-    """
-bias correction
-    """
-    #ctl = ctl-(ctl.mean('member').mean('time')-era5_var.mean('time'))    
-    #sens = sens-(sens.mean('member').mean('time')-era5_var.mean('time'))
     
     return ctl, sens, era5_var
 
@@ -230,3 +224,14 @@ def convert_longitudes(ds, lon_name):
 
     ds = ds.rename({'_longitude_adjusted': lon_name})
     return ds
+
+
+###############################################################################
+def mse(dataset, ref):
+     
+    """mse"""
+    delta = dataset - ref
+
+    mean_square_error = (delta*delta).mean('time')
+    
+    return mean_square_error

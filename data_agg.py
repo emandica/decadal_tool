@@ -6,8 +6,6 @@ Created on Tue Feb  7 11:57:27 2023
 @author: ema
 """
 
-import xarray as xr
-
 import constants as c
 import open_dataset as od
 import generic_routines as cr
@@ -18,7 +16,6 @@ def aggr_datasets(lead_exp, season):
     """
     open datasets
     """
-    
     ctl, sens, ref = od.open_dataset_and_seasonal_selection(lead_exp, season)
 
 #%%

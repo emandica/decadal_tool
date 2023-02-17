@@ -5,7 +5,7 @@ Created on Wed Jan 18 11:47:05 2023
 
 @author: ema
 """
-import xarray as xr
+
 import generic_routines as ncr
 import constants as c
 
@@ -50,11 +50,5 @@ season selection, Clim is the yearly mean
     ctl = ncr.dataset_season(ctl, season)
     sens = ncr.dataset_season(sens, season)
     ref = ncr.dataset_season(ref, season)
-#%%
-    """
-bias correction
-    """
-    #ctl = ctl-(ctl.mean('member').mean('time')-era5_var.mean('time'))    
-    #sens = sens-(sens.mean('member').mean('time')-era5_var.mean('time'))
     
     return ctl, sens, ref

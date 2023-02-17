@@ -6,20 +6,14 @@ Created on Mon Jan 23 16:58:41 2023
 @author: ema
 """
 import argparse
-import xarray as xr
 
-import mean_bias as mb
-import correlation as corr
-import xsection as xs
+import run_xsec as rx
+import run_mbias as rm
+import run_correlation as rc
+import run_msss as rmsss
 
 import constants as c
 
-import data_agg as da
-import data_agg_corr as da_cor
-
-import run_bootstrap as rb
-
-import level_selection as ls
 #%%
 # entry point for the program
 if __name__ == '__main__':
@@ -32,7 +26,7 @@ if __name__ == '__main__':
         type=int,
         default=[],
         )
-    
+
     CLI.add_argument(
             "-SEASON",
             #nargs="*",
@@ -42,104 +36,21 @@ if __name__ == '__main__':
 
     args=CLI.parse_args()
 
-    season = 'Clim' #args.SEASON
-    lead_exp = [3,4] #args.LEAD_LIST
+    SEASON = args.SEASON
+    lead_exp = args.LEAD_LIST
+
+#%%Mean bias
+    if c.M_BIAS:
+        rm.run_mbias(lead_exp, SEASON)
+
+#%%Correlation
+    if c.CORRELATION:
+        rc.run_corr(lead_exp, SEASON)
+
+#%%MSSS
+    if c.MSSS:
+        rmsss.run_msss(lead_exp, SEASON)
 
 #%%xsection
     if c.XSECT:
-        #%%data aggregation 
-        print('starting data aggregation')
-            
-        da.aggr_datasets(lead_exp, season)
-        print('data aggregation: OK')
-        
-        
-        print('starting crossection')
-        
-        xs.xsection(lead_exp, season)
-        print('ensemble mean xsection: OK')
-        
-        #%%bootstrap
-        ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_xsection.nc', chunks={'lon':'auto','lat':'auto'})
-        sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_xsection.nc', chunks={'lon':'auto','lat':'auto'})
-        
-        rb.bootstrap(ctl,sens,lead_exp,season)
-        
-        ctl.close()
-        sens.close()
-        print('bootstrap: OK')
-        
-        xs.xsection_significance(lead_exp, season)
-        print('xsection significance: OK')
-
-        xs.xsection_plot(lead_exp, season)      
-        print('xsection plt: OK')
-        print('xsection: OK')
-        
-#%%Mean bias
-    if c.M_BIAS:
-        #%%data aggregation
-        print('starting data aggregation')
-            
-        da.aggr_datasets(lead_exp, season)
-        print('data aggregation: OK')
-        
-        
-        print('starting mean bias')        
-        ls.level_sel(lead_exp, season)
-       
-        #%%bootstrap
-        ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
-        sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
-        
-        ctl = ctl.mean('time')
-        sens = sens.mean('time')
-        
-        rb.bootstrap(ctl,sens,lead_exp,season)
-        
-        ctl.close()
-        sens.close()
-        print('bootstrap: OK')
-        
-        mb.bias_significance(lead_exp, season)
-        print('bias significance: OK')
-        
-        mb.bias_plot(lead_exp, season)
-        print('bias plot: OK')
-        print('bias: OK')
-
-                
-#%%Correlation
-    if c.CORRELATION:
-        #%%data aggregation
-        print('starting data aggregation')
-            
-        da_cor.aggr_datasets(lead_exp, season)
-        print('data aggregation: OK')
-        
-        
-        print('starting correlation')
-        #%%level selection
-        ls.level_sel(lead_exp, season)
-        
-        ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
-        sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
-        #%%bootstrap
-        rb.bootstrap(ctl,sens,lead_exp,season)
-        
-        ctl.close()
-        sens.close()
-        
-        corr.acc(lead_exp, season)
-        print('ensemble mean ACC: OK')
-        
-        corr.acc_significance(lead_exp,season)
-        print('correlation significance: OK')
-        
-        corr.correlation_plot(lead_exp,season)
-        print('correlation plot: OK')
-        print('correlation: OK')    
-
-#%%MSSS        
-    #if c.MSSS:
-        
+        rx.run_xsec(lead_exp, SEASON)

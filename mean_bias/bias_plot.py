@@ -43,12 +43,14 @@ def bias_plot(lead_exp, season):
     ctl = ctl-ref
     sens=sens-ref
 #%% 
-    #%%tas   
-    #levels1=[-5,-4,-3,-2,-1,0,1,2,3,4,5]
-    #levels2=[-2.5,-2,-1.5,-1,-0.5,0.,0.5,1,1.5,2,2.5]
+    #%%tas
+    if c.VAR == 'tas':
+        levels1=[-5,-4,-3,-2,-1,0,1,2,3,4,5]
+        levels2=[-2.5,-2,-1.5,-1,-0.5,0.,0.5,1,1.5,2,2.5]
     #%%psl
-    levels1=[-300,-250,-200,-150,-100,-50,0,50,100,150,200,250,300]
-    levels2=[-120,-100,-80,-60,-40,-20,0,20,40,60,80,100,120]
+    elif c.VAR == 'psl':
+        levels1=[-300,-250,-200,-150,-100,-50,0,50,100,150,200,250,300]
+        levels2=[-120,-100,-80,-60,-40,-20,0,20,40,60,80,100,120]
     
     title=c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
     pl.parametric_map_plot(ctl,p_ctl,levels=levels1,title=title, sign=0.95)
