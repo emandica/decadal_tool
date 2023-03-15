@@ -39,7 +39,7 @@ def bias_plot(lead_exp, season):
     sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_MBIAS.nc')
     p_ctl = xr.open_dataarray(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bias_p_'+c.REF+'.nc')
     p_sens = xr.open_dataarray(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bias_p_'+c.REF+'.nc')
-    ref = xr.open_dataset(c.RUN_DIR+c.REF+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc')    
+    ref = xr.open_dataset(c.RUN_DIR+c.REF+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc')    
     ref = ref.mean('time')
     delta = sens - ctl    
     ctl = ctl-ref
@@ -57,8 +57,8 @@ def bias_plot(lead_exp, season):
         #delta=xr.where(delta.apply(np.fabs)<10, np.NaN , delta)
     #%%ua        
     elif c.VAR == 'ua':
-        levels1=[-5,-4,-3,-2,-1,0,1,2,3,4,5]
-        levels2=[-2.5,-2,-1.5,-1,-0.5,0.,0.5,1,1.5,2,2.5]
+        levels1=[-2,-1.5,-1,-0.5,0,0.5,1,1.5,2]
+        levels2=[-0.5,-0.4,-0.3,-0.2,-0.1,0.1,0.2,0.3,0.4,0.5]
     
     title=c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
     pl.parametric_map_plot(ctl,p_ctl,levels=levels1,title=title, sign=0.95)
