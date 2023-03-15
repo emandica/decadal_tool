@@ -66,18 +66,37 @@ def correlation_plot(lead_exp, season):
         
         delta=sens-ctl
 #%%    
-    levels1=[-0.9,-0.8,-0.7,-0.6,-0.5,-0.4,-0.3,-0.2,0,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
-    levels2=[-0.5,-0.4,-0.3,-0.2,0,0.2,0.3,0.4,0.5]
-    #levels2=[-0.9,-0.8,-0.7,-0.6,-0.5,-0.4,-0.3,-0.2,0,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
+    levels1=[-0.9,-0.8,-0.7,-0.6,-0.5,-0.4,-0.3,-0.2,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
+    levels2=[-0.9,-0.8,-0.7,-0.6,-0.5,-0.4,-0.3,-0.2,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
     
     title=c.NAME_CTL+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
-    pl.parametric_map_plot(ctl,sign_ctl[c.VAR],levels=levels1, title=title, sign=0.95)
-    plt.savefig(c.OUT_DIR + c.NAME_CTL+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_no_antartica.jpg', dpi=300, bbox_inches='tight')
+    pl.parametric_map_plot(ctl,sign_ctl[c.VAR],levels=levels1, title=title, sign=c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_CTL+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'.jpg', dpi=300, bbox_inches='tight')
     
+    pl.parametric_map_plot_no_antartica(ctl,sign_ctl[c.VAR],levels=levels1, title=title, sign=c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_CTL+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'_no_antartica.jpg', dpi=300, bbox_inches='tight')
+    
+    pl.parametric_map_plot_polar(ctl,sign_ctl[c.VAR],levels=levels1, title=title, sign=c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_CTL+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'_polar.jpg', dpi=300, bbox_inches='tight')
+    
+    #%%
     title=c.NAME_SENS+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
-    pl.parametric_map_plot(sens,sign_sens[c.VAR],levels=levels1,title=title,sign=0.95)
-    plt.savefig(c.OUT_DIR + c.NAME_SENS+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_no_antartica.jpg', dpi=300, bbox_inches='tight')
+    pl.parametric_map_plot(sens,sign_sens[c.VAR],levels=levels1,title=title,sign=c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'.jpg', dpi=300, bbox_inches='tight')
     
+    pl.parametric_map_plot_no_antartica(sens,sign_sens[c.VAR],levels=levels1,title=title,sign=c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'_no_antartica.jpg', dpi=300, bbox_inches='tight')
+    
+    pl.parametric_map_plot_polar(sens,sign_sens[c.VAR],levels=levels1,title=title,sign=c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'_polar.jpg', dpi=300, bbox_inches='tight')
+    
+    #%%
     title=c.NAME_SENS+'-'+c.NAME_CTL+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
-    pl.bootstrap_map_plot(delta,sign_delta,levels=levels2,title=title, sign = 0.95)
-    plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+'_' + c.REF + '_no_antartica.jpg', dpi=300, bbox_inches='tight')
+    pl.bootstrap_map_plot(delta,sign_delta,levels=levels2,title=title, sign = c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+'_' + c.REF + '_'+str(c.SIGN)+'.jpg', dpi=300, bbox_inches='tight')
+    
+    pl.bootstrap_map_plot_no_antartica(delta,sign_delta,levels=levels2,title=title, sign = c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+'_' + c.REF + '_'+str(c.SIGN)+'_no_antartica.jpg', dpi=300, bbox_inches='tight')
+    
+    pl.bootstrap_map_plot_polar(delta,sign_delta,levels=levels2,title=title, sign = c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_ACC_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+'_' + c.REF + '_'+str(c.SIGN)+'_polar.jpg', dpi=300, bbox_inches='tight')

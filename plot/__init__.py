@@ -1,5 +1,11 @@
 #
 from .bootstrap_map_plot import bootstrap_map_plot
+from .bootstrap_map_plot_polar import bootstrap_map_plot_polar
+from .bootstrap_map_plot_noantartica import bootstrap_map_plot_no_antartica
+
 from .parametric_map_plot import parametric_map_plot
+from .parametric_map_plot_polar import parametric_map_plot_polar
+from .parametric_map_plot_noantartica import parametric_map_plot_no_antartica
+
 from .parametric_xsection_plot import parametric_xsection_plot
 from .bootstrap_xsection_plot import bootstrap_xsection_plot

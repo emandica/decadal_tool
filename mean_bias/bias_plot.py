@@ -8,6 +8,8 @@ Created on Fri Jan 27 14:16:12 2023
 
 import xarray as xr
 
+import numpy as np
+
 import matplotlib.pyplot as plt
 
 import constants as c
@@ -46,20 +48,46 @@ def bias_plot(lead_exp, season):
     #%%tas
     if c.VAR == 'tas':
         levels1=[-5,-4,-3,-2,-1,0,1,2,3,4,5]
-        levels2=[-2.5,-2,-1.5,-1,-0.5,0.,0.5,1,1.5,2,2.5]
+        levels2=[-2.5,-2,-1.5,-1,-0.5,-0.1,0.1,0.5,1,1.5,2,2.5]
+        delta=xr.where(delta.apply(np.fabs)<0.1, np.NaN , delta)
     #%%psl
     elif c.VAR == 'psl':
-        levels1=[-300,-250,-200,-150,-100,-50,0,50,100,150,200,250,300]
-        levels2=[-120,-100,-80,-60,-40,-20,0,20,40,60,80,100,120]
+        levels1=[-500,-400,-300,-200,-100,0,100,200,300,400,500]
+        levels2=[-120,-100,-80,-60,-40,-20,-10,10,20,40,60,80,100,120]
+        #delta=xr.where(delta.apply(np.fabs)<10, np.NaN , delta)
+    #%%ua        
+    elif c.VAR == 'ua':
+        levels1=[-5,-4,-3,-2,-1,0,1,2,3,4,5]
+        levels2=[-2.5,-2,-1.5,-1,-0.5,0.,0.5,1,1.5,2,2.5]
     
     title=c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
     pl.parametric_map_plot(ctl,p_ctl,levels=levels1,title=title, sign=0.95)
-    plt.savefig(c.OUT_DIR + c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '.jpg', dpi=300, bbox_inches='tight')
+    plt.savefig(c.OUT_DIR + c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'.jpg', dpi=300, bbox_inches='tight')
+
+    pl.parametric_map_plot_no_antartica(ctl,p_ctl,levels=levels1,title=title, sign=0.95)
+    plt.savefig(c.OUT_DIR + c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'_no_antartica.jpg', dpi=300, bbox_inches='tight')
     
+    pl.parametric_map_plot_polar(ctl,p_ctl,levels=levels1,title=title, sign=0.95)
+    plt.savefig(c.OUT_DIR + c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'_polar.jpg', dpi=300, bbox_inches='tight')
+    
+    #%%
     title=c.NAME_SENS+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
-    pl.parametric_map_plot(sens,p_sens,levels=levels1,title=title,sign=0.95)
-    plt.savefig(c.OUT_DIR + c.NAME_SENS+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '.jpg', dpi=300, bbox_inches='tight')
+    pl.parametric_map_plot(sens,p_sens,levels=levels1,title=title,sign=c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'.jpg', dpi=300, bbox_inches='tight')
     
+    pl.parametric_map_plot_no_antartica(sens,p_sens,levels=levels1,title=title,sign=c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'_no_antartica.jpg', dpi=300, bbox_inches='tight')
+    
+    pl.parametric_map_plot_polar(sens,p_sens,levels=levels1,title=title,sign=c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF + '_'+str(c.SIGN)+'_polar.jpg', dpi=300, bbox_inches='tight')
+    
+    #%%
     title=c.NAME_SENS+'-'+c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+ '_' + c.REF
-    pl.bootstrap_map_plot(delta,sign_delta,levels=levels2,title=title, sign = 0.95)
-    plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+'_' + c.REF + '.jpg', dpi=300, bbox_inches='tight')    
+    pl.bootstrap_map_plot(delta,sign_delta,levels=levels2,title=title, sign = c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+'_' + c.REF + '_'+str(c.SIGN)+'.jpg', dpi=300, bbox_inches='tight')
+
+    pl.bootstrap_map_plot_no_antartica(delta,sign_delta,levels=levels2,title=title, sign = c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+'_' + c.REF + '_'+str(c.SIGN)+'_no_antartica.jpg', dpi=300, bbox_inches='tight')    
+    
+    pl.bootstrap_map_plot_polar(delta,sign_delta,levels=levels2,title=title, sign = c.SIGN)
+    plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_MBIAS_'+c.VAR+'_lead_'+str(lead_exp) + '_' + season + '_s'+str(c.T_START)+'_' + c.REF + '_'+str(c.SIGN)+'_polar.jpg', dpi=300, bbox_inches='tight')

@@ -49,4 +49,3 @@ def run_mbias(lead_exp, season):
     mb.bias_plot(lead_exp, season)
     print('bias plot: OK')
     print('bias: OK')
-    print('ensemble mean ACC: OK')

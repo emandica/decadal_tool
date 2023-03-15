@@ -30,8 +30,9 @@ def open_dataset(path, lead, member_number, time_start, no_member=False):
             print('member '+str(member)+' is ignored')
         else:
             name = "r"+str(member)+"_lead_"+str(lead)+"_r.nc"
-            data = xr.open_dataset(path+name,chunks='auto')
+            data = xr.open_dataset(path+name,chunks={'lon':'auto','lat':'auto'})
             ancillary.append(data)
+            print('member '+str(member))
     data= xr.concat(ancillary, dim='member')
     data = data.sel(time=slice(time_start, data.time[-1]))
     return data
@@ -68,7 +69,7 @@ def lead_aggregation(lead, var, number, name,t_start, no_member):
         
         ancillary.append(dset)
 
-    dset = xr.concat(ancillary, dim='lead',)
+    dset = xr.concat(ancillary, dim='lead')
     return dset
 
 ###############################################################################
@@ -202,7 +203,7 @@ def cross_section(dset):
     weights = np.cos(np.deg2rad(dset.lat))
     weights.name = "weights"
     
-    dset = dset.sel(**{LatIndexer: slice(-15,0)}).weighted(weights).mean(LatIndexer)
+    dset = dset.sel(**{LatIndexer: slice(-5,5)}).weighted(weights).mean(LatIndexer)
     
     return dset
 

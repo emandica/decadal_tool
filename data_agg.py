@@ -26,14 +26,14 @@ def aggr_datasets(lead_exp, season):
     sens = sens.mean('lead')
 
     ref = ref.rolling(time=len(lead_exp)).mean()
-    ref = ref.shift(time=-round(len(lead_exp)/2))
+    ref = ref.shift(time=-(len(lead_exp)-1))
 
 #%% synchronize time
-    ref = cr.align_time(ctl, ref)
+    #ref = cr.align_time(ctl, ref)
     
     
-    ctl = ctl.sel(time=sens.time)
-    ref = ref.sel(time=sens.time)
+    #ctl = ctl.sel(time=sens.time)
+    #ref = ref.sel(time=sens.time)
 #%%
     """
     save dataset
@@ -42,9 +42,3 @@ def aggr_datasets(lead_exp, season):
     sens.to_netcdf(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc')
     ref.to_netcdf(c.RUN_DIR+c.REF+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc')
     
-    """
-    close file
-    """
-    ctl.close()
-    sens.close()
-    ref.close()

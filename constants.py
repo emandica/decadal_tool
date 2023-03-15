@@ -7,55 +7,57 @@ Created on Tue Nov 29 20:43:24 2022
 """
 ###constants definitiontion
 ###exoperiments data
-NAME_SENS = 
-NAME_CTL = 
-T_START = 
-SENS_NUMBER = 
-CTL_NUMBER = 
+NAME_SENS = 'a52o'
+NAME_CTL = 'a1ua'
+T_START = 1993
+SENS_NUMBER = 10
+CTL_NUMBER = 10
 VAR =
 UNITS =
-DIM =
+
+DIM = "3D"
+'surface for 2D variables'
 PLEV =
 
+SIGN = 0.95
 
 ###calculation information
 no_member = [0] #member to exclude
 
-
 ###flag for reference
-REF = 'era'
+REF = 
 
 if REF == 'era':
-    """era5"""
-    ERA_VAR =
-    DIRECTORY_ERA =
-    FILE_ERA =
+###era5###
+    ERA_VAR = 
+    DIRECTORY_ERA = 
+    FILE_ERA = 
 
 elif REF == 'hadcrut':
-    """Observations"""
-    DIRECTORY_OBS =
-    FILE_OBS =
+###Observations###
+    DIRECTORY_OBS = 
+    FILE_OBS = 
 
 ###Directories
 FILE_DIR =
 
 RUN_DIR =
 
-OUT_DIR =
+OUT_DIR = 
 
 ###############################################################################
 ###flags for diagnostics###
 ###############################################################################
 #mean bias
-M_BIAS = False
-
-##############################################################################
-#crossection
-XSECT = False
+M_BIAS = True
 
 ###############################################################################
 #correlation
 CORRELATION = False
+
+##############################################################################
+#crossection
+XSECT = False
 
 ###############################################################################
 #mean squerad skill score
@@ -64,3 +66,12 @@ MSSS = False
 ###############################################################################
 #bootstrap method
 BOOTSTRAP = 'standard'
+
+###############################################################################
+###climate indices
+###############################################################################
+###NAO
+NAO = False
+
+### AO
+AO = False

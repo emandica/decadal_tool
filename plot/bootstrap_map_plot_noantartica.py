@@ -16,7 +16,7 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 
 import constants as c
 
-def bootstrap_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
+def bootstrap_map_plot_no_antartica(ds, ds_sign, levels, title=None, sign=0.95):
     
     #plot significance
     if sign == 0.95:
@@ -40,7 +40,7 @@ def bootstrap_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
     
     p = ds[c.VAR].plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
                    add_labels=False, add_colorbar=False,
-                   extend='both',
+                   extend='both'
                    )
     
     _ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
@@ -48,6 +48,8 @@ def bootstrap_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
     
     #add coastlines
     ax.coastlines()
+    
+    ax.set_ylim([-60,90])
     
     # add separate colorbar
     cb = plt.colorbar(p, ticks=levels, shrink=0.6, extend='both')

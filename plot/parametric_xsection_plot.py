@@ -44,7 +44,7 @@ def parametric_xsection_plot(ds, ds_sign, levels, title=None, sign=0.95):
     fig = plt.figure(figsize=[12,8])
     ax = fig.add_subplot(111)
     
-    p = ds[c.VAR].plot.contourf(ax=ax, levels=levels,
+    p = ds[c.VAR].plot(ax=ax, levels=levels,
                    add_labels=False, add_colorbar=False,
                    extend='both',
                    )
@@ -55,7 +55,8 @@ def parametric_xsection_plot(ds, ds_sign, levels, title=None, sign=0.95):
                                  )
     
     # add separate colorbar
-    cb = plt.colorbar(p, ticks=levels, shrink=1, extend='both',)
+    cb = plt.colorbar(p, ticks=levels, shrink=1, extend='both')
+    cb.set_label(c.UNITS,fontsize=18)
     cb.ax.tick_params(labelsize=18)
 
     #Drow gridlines and adjust labels

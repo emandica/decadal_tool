@@ -30,19 +30,28 @@ def bias_significance(lead_exp,season):
     """
     ensemble mean
     """
-    ctl=ctl.mean('member')
-    sens=sens.mean('member')
+    #ctl=ctl.mean('member')
+    ctl=ctl.mean('time')
+    #sens=sens.mean('member')
+    sens=sens.mean('time')
+    ref = ref.mean('time')
     
     """
     Bias p value
     """    
-    _, p_ctl = stats.ttest_ind(ctl[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0,equal_var=False)    
-    p_ctl = xr.DataArray(p_ctl, coords=ctl[c.VAR].mean('time').coords)
-    ctl = ctl.mean('time')
+    #_, p_ctl = stats.ttest_ind(ctl[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0, equal_var=False)    
+    _, p_ctl = stats.ttest_1samp(ctl[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0)    
+    #p_ctl = xr.DataArray(p_ctl, coords=ctl[c.VAR].mean('time').coords)
+    p_ctl = xr.DataArray(p_ctl, coords=ctl[c.VAR].mean('member').coords)
+    #ctl = ctl.mean('time')
+    ctl = ctl.mean('member')
     
-    _, p_sens = stats.ttest_ind(sens[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0,equal_var=False)
-    p_sens = xr.DataArray(p_sens, coords=sens[c.VAR].mean('time').coords)
-    sens = sens.mean('time')
+#    _, p_sens = stats.ttest_ind(sens[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0, equal_var=False)
+    _, p_sens = stats.ttest_1samp(sens[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0)
+    #p_sens = xr.DataArray(p_sens, coords=sens[c.VAR].mean('time').coords)
+    p_sens = xr.DataArray(p_sens, coords=sens[c.VAR].mean('member').coords)
+    #sens = sens.mean('time')
+    sens = sens.mean('member')
 #%%
     """
     save files

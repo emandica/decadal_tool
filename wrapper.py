@@ -11,6 +11,8 @@ import run_xsec as rx
 import run_mbias as rm
 import run_correlation as rc
 import run_msss as rmsss
+import NAO_index as nao
+import AO_index as ao
 
 import constants as c
 
@@ -36,8 +38,8 @@ if __name__ == '__main__':
 
     args=CLI.parse_args()
 
-    SEASON = args.SEASON
-    lead_exp = args.LEAD_LIST
+    SEASON = 'Clim' #args.SEASON
+    lead_exp = [3,4] #args.LEAD_LIST
 
 #%%Mean bias
     if c.M_BIAS:
@@ -54,3 +56,11 @@ if __name__ == '__main__':
 #%%xsection
     if c.XSECT:
         rx.run_xsec(lead_exp, SEASON)
+
+#%%NAO
+    if c.NAO:
+        nao.NAO(lead_exp,SEASON)
+        
+#%%AO
+    if c.AO:
+        ao.AO(lead_exp,SEASON)

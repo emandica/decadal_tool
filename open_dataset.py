@@ -28,8 +28,8 @@ Load datasets
 
     if c.REF=='era':
         ref = ncr.open_era5(c.DIRECTORY_ERA, c.FILE_ERA, c.VAR)
-        ref = ref.sel(time=slice(ctl.time[0].dt.strftime("%Y-%m"),
-                                 ref.time[-1].dt.strftime("%Y-%m")))
+        ref = ref.sel(time=slice(ctl.time[0],
+                                 ref.time[-1]))
         
     elif c.REF == 'hadcrut':
         ref = ncr.open_hadcrut(c.DIRECTORY_OBS, c.FILE_OBS, c.VAR)
@@ -38,17 +38,10 @@ Load datasets
     print('reference: OK')        
         
     """
-get variables
-    """
-    ctl = ctl.get(c.VAR)
-    sens = sens.get(c.VAR)
-    ref = ref.get(c.VAR)
-    
-    """
 season selection, Clim is the yearly mean
     """
-    ctl = ncr.dataset_season(ctl, season)
-    sens = ncr.dataset_season(sens, season)
-    ref = ncr.dataset_season(ref, season)
+    ctl_s = ncr.dataset_season(ctl[c.VAR], season)
+    sens_s = ncr.dataset_season(sens[c.VAR], season)
+    ref_s = ncr.dataset_season(ref[c.VAR], season)
     
-    return ctl, sens, ref
+    return ctl_s, sens_s, ref_s

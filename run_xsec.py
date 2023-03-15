@@ -23,7 +23,6 @@ def run_xsec(lead_exp, season):
         
         
     print('starting crossection')
-    print('ensemble mean ACC: OK')
     xs.xsection(lead_exp, season)
     print('ensemble mean xsection: OK')
         

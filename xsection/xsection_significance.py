@@ -29,19 +29,25 @@ def xsection_significance(lead_exp,season):
     sens = cr.cross_section(sens)
     ref = cr.cross_section(ref)    
     
-    ctl = ctl.mean('member')
-    sens = sens.mean('member')
-    
+    #ctl = ctl.mean('member')
+    #sens = sens.mean('member')
+    ctl = ctl.mean('time')
+    sens = sens.mean('time')
+
     """
     p value
     """    
-    _, p_ctl = stats.ttest_ind(ctl[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0,equal_var=False)
-    _, p_sens = stats.ttest_ind(sens[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0,equal_var=False)
+    #_, p_ctl = stats.ttest_ind(ctl[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0,equal_var=False)
+    #_, p_sens = stats.ttest_ind(sens[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0,equal_var=False)
     
-    p_ctl = xr.DataArray(p_ctl, coords=ctl[c.VAR].mean('time').coords)
+    _, p_ctl = stats.ttest_1samp(ctl[c.VAR].to_numpy(), ref[c.VAR].mean('time').to_numpy())
+    _, p_sens = stats.ttest_1samp(sens[c.VAR].to_numpy(), ref[c.VAR].mean('time').to_numpy())
     
-    p_sens = xr.DataArray(p_sens, coords=sens[c.VAR].mean('time').coords)
+    #p_ctl = xr.DataArray(p_ctl, coords=ctl[c.VAR].mean('time').coords)
+    #p_sens = xr.DataArray(p_sens, coords=sens[c.VAR].mean('time').coords)
 
+    p_ctl = xr.DataArray(p_ctl, coords=ctl[c.VAR].mean('member').coords)
+    p_sens = xr.DataArray(p_ctl, coords=sens[c.VAR].mean('member').coords)
 #%%
     """
     save files

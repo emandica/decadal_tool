@@ -19,7 +19,6 @@ def run_corr(lead_exp, season):
     print('starting data aggregation')
 
     da_cor.aggr_datasets(lead_exp, season)
-    #ctl, sens, ref = od.open_dataset_and_seasonal_selection(lead_exp, season)
     print('data aggregation: OK')
         
     print('starting correlation')
@@ -30,9 +29,6 @@ def run_corr(lead_exp, season):
     sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
 #%%bootstrap
     rb.bootstrap(ctl,sens,lead_exp,season)
-        
-    ctl.close()
-    sens.close()
         
     corr.acc(lead_exp, season)
     print('ensemble mean ACC: OK')

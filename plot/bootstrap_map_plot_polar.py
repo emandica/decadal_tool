@@ -9,6 +9,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import matplotlib.path as mpath
 
 import cartopy.crs as ccrs
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
@@ -16,7 +17,7 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 
 import constants as c
 
-def bootstrap_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
+def bootstrap_map_plot_polar(ds, ds_sign, levels, title=None, sign=0.95):
     
     #plot significance
     if sign == 0.95:
@@ -29,18 +30,19 @@ def bootstrap_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
         min_v = 2
         max_v = -3
         
-    #ds = ds.where((ds[c.VAR] <= ds_sign[c.VAR][2,:,:]) | (ds[c.VAR] >= ds_sign[c.VAR][-3,:,:]))
+    ds = ds.where((ds[c.VAR] <= ds_sign[c.VAR][2,:,:]) | (ds[c.VAR] >= ds_sign[c.VAR][-3,:,:]))
     neg = np.where(ds[c.VAR] <= ds_sign[c.VAR][min_v,:,:])
     pos = np.where(ds[c.VAR] >= ds_sign[c.VAR][max_v,:,:])
     lons, lats = np.meshgrid(ds.lon, ds.lat) 
     
 #%%plot fields
     fig = plt.figure(figsize=[12,8])
-    ax = fig.add_subplot(111, projection=ccrs.PlateCarree())
+    ax = fig.add_subplot(111, projection=ccrs.Orthographic(central_longitude=0,central_latitude=90))
     
     p = ds[c.VAR].plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
                    add_labels=False, add_colorbar=False,
-                   extend='both',
+                   extend='both', 
+                   #cmap='bwr',
                    )
     
     _ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
@@ -49,10 +51,24 @@ def bootstrap_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
     #add coastlines
     ax.coastlines()
     
+    ax.set_extent([0,360,30,90], ccrs.PlateCarree())
+    
     # add separate colorbar
-    cb = plt.colorbar(p, ticks=levels, shrink=0.6, extend='both')
+    cb = plt.colorbar(p, ticks=levels, shrink=1, extend='both')
     cb.set_label(c.UNITS,fontsize=18)
+    
+    #cb.set_label(c.UNITS,fontsize=18)
     cb.ax.tick_params(labelsize=18)
+    
+    # Compute a circle in axes coordinates, which we can use as a boundary
+# for the map. We can pan/zoom as much as we like - the boundary will be
+# permanently circular.
+    theta = np.linspace(0, 2*np.pi, 100)
+    center, radius = [0.5, 0.5], 0.5
+    verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+    circle = mpath.Path(verts * radius + center)
+
+    ax.set_boundary(circle, transform=ax.transAxes)
 
     #Drow gridlines and adjust labels
     gl = p.axes.gridlines(crs=ccrs.PlateCarree(), draw_labels=True)
