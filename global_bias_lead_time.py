@@ -7,14 +7,21 @@ Created on Mon Feb 27 18:05:38 2023
 """
 
 import xarray as xr
+import os.path
 
 import numpy as np
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 22})
 import constants as c
+import data_agg as da
+import level_selection as ls
 
 def global_bias(season):
-    
+    for i in [[0],[1],[2],[3],[4]]:
+        if os.path.isfile(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(i)+'_'+season+'_s'+str(c.T_START)+'.nc') == False:
+            da.aggr_datasets(i, season)
+        if os.path.isfile(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(i)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc') == False:            
+            ls.level_sel(i, season)
 #%%    
     ctl_path_0 = c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead[0]_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc'
     ctl_0 = xr.open_dataset(ctl_path_0, chunks={'lon':'auto','lat':'auto'})
@@ -76,63 +83,71 @@ def global_bias(season):
     dset = xr.open_dataset(a52o_land_file)
     dset=dset['LSM']
     
-    if mask=='land':
-        ctl = xr.where(dset.mean('time')>0.5, ctl, np.nan)
-        sens = xr.where(dset.mean('time')>0.5, sens, np.nan)
-        era = xr.where(dset.mean('time')>0.5, era, np.nan)
-    elif mask=='ocean':
-        ctl = xr.where(dset.mean('time')<0.5, ctl, np.nan)
-        sens = xr.where(dset.mean('time')<0.5, sens, np.nan)
-        era = xr.where(dset.mean('time')<0.5, era, np.nan)
+    ctl = ctl[c.VAR]
+    sens = sens[c.VAR]
+    era = era[c.VAR]
+    
+    for mask in ['global','land','ocean']:
+    
+        if mask=='land':
+            nctl = xr.where(dset.mean('time')>0.5, ctl, np.nan)
+            nsens = xr.where(dset.mean('time')>0.5, sens, np.nan)
+            nera = xr.where(dset.mean('time')>0.5, era, np.nan)
+        elif mask=='ocean':
+            nctl = xr.where(dset.mean('time')<0.5, ctl, np.nan)
+            nsens = xr.where(dset.mean('time')<0.5, sens, np.nan)
+            nera = xr.where(dset.mean('time')<0.5, era, np.nan)
+        else:
+            nctl=ctl
+            nsens=sens
+            nera=era
 
-#%%
-    """
-    global mean
-    """
-    lat_min = -90
-    lat_max = 90
+        """
+        global mean
+        """
+        lat_min = -90
+        lat_max = 90
 
-    lon_min = 0
-    lon_max = 360
+        lon_min = 0
+        lon_max = 360
 
 
-    LatIndexer, LonIndexer = 'lat', 'lon'
-    weights = np.cos(np.deg2rad(ctl_0[c.VAR].lat))
-    weights.name = "weights"
+        LatIndexer, LonIndexer = 'lat', 'lon'
+        weights = np.cos(np.deg2rad(ctl_0[c.VAR].lat))
+        weights.name = "weights"
 
-    ctl = ctl[c.VAR].sel(**{LatIndexer: slice(lat_min,lat_max) , LonIndexer: slice(lon_min,lon_max)}).weighted(weights).mean(LatIndexer).mean(LonIndexer)
+        nctl = nctl.sel(**{LatIndexer: slice(lat_min,lat_max) , LonIndexer: slice(lon_min,lon_max)}).weighted(weights).mean(LatIndexer).mean(LonIndexer)
+        
+        nsens = nsens.sel(**{LatIndexer: slice(lat_min,lat_max),LonIndexer:slice(lon_min,lon_max)}).weighted(weights).mean(LatIndexer).mean(LonIndexer)
     
-    sens = sens[c.VAR].sel(**{LatIndexer: slice(lat_min,lat_max),LonIndexer:slice(lon_min,lon_max)}).weighted(weights).mean(LatIndexer).mean(LonIndexer)
+        nera = nera.sel(**{LatIndexer: slice(lat_min,lat_max),LonIndexer:slice(lon_min,lon_max)}).weighted(weights).mean(LatIndexer).mean(LonIndexer)
     
-    era = era[c.VAR].sel(**{LatIndexer: slice(lat_min,lat_max),LonIndexer:slice(lon_min,lon_max)}).weighted(weights).mean(LatIndexer).mean(LonIndexer)
-    
-#%%
-    ctl = ctl-era
-    sens = sens-era   
+        nctl = nctl-nera
+        nsens = nsens-nera   
 
-#%%
-    ctl = ctl.mean('time')
-    sens = sens.mean('time')
+        nctl = nctl.mean('time')
+        nsens = nsens.mean('time')
     
-    ctl_std=ctl.std('member')
-    ctl=ctl.mean('member')
+        ctl_std=nctl.std('member')
+        nctl=nctl.mean('member')
 
-    sens_std=sens.std('member')    
-    sens=sens.mean('member')
+        sens_std=nsens.std('member')    
+        nsens=nsens.mean('member')
     
-#%%
-    fig = plt.figure(figsize=[12,8])
-    ax = fig.add_subplot(111)
+        fig = plt.figure(figsize=[12,8])
+        ax = fig.add_subplot(111)
+        
+        p = nctl.plot.line(x='lead_year',label=c.NAME_CTL)
+        _ = nsens.plot(label=c.NAME_SENS)
+        _ = ax.fill_between(nctl.lead_year,nctl-ctl_std,nctl+ctl_std,alpha=0.5) 
+        _ = ax.fill_between(nsens.lead_year,nsens-sens_std,nsens+sens_std,alpha=0.5) 
+        plt.legend()
     
-    p = ctl.plot(ax=ax,label=c.NAME_CTL)
-    _ = sens.plot(label=c.NAME_SENS)
-    _ = ax.fill_between(ctl.lead_year,ctl-ctl_std,ctl+ctl_std,alpha=0.5) 
-    _ = ax.fill_between(sens.lead_year,sens-sens_std,sens+sens_std,alpha=0.5) 
-    plt.legend()
+        ax.set_xticks([0,1,2,3,4])
+        ax.set_xlim([0,4])
+        ax.set_ylabel(c.UNITS)
+        #if c.VAR == 'ua':
+            #ax.set_ylim([-0.2,0])
+        ax.set_title(c.NAME_SENS+'-'+c.NAME_CTL+'_'+mask+'_bias_'+c.VAR+'('+c.UNITS+')_' + season + '_s'+str(c.T_START)+ '_' + c.REF)
     
-    ax.set_xticks([0,1,2,3,4])
-    ax.set_xlim([0,4])
-    ax.set_ylim([-1.5,0])
-    ax.set_title(c.NAME_SENS+'-'+c.NAME_CTL+'_'+mask+'_bias_'+c.VAR+'('+c.UNITS+')_' + season + '_s'+str(c.T_START)+ '_' + c.REF)
-    
-    plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_'+mask+'_BIAS_'+c.VAR+ '_' + season + '_s'+str(c.T_START)+'_' + c.REF +'.jpg', dpi=300, bbox_inches='tight')
+        plt.savefig(c.OUT_DIR + c.NAME_SENS+'-'+c.NAME_CTL+'_'+mask+'_BIAS_'+c.VAR+ '_' + season + '_s'+str(c.T_START)+'_' + c.REF +'.jpg', dpi=300, bbox_inches='tight')

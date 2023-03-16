@@ -30,7 +30,7 @@ def open_dataset(path, lead, member_number, time_start, no_member=False):
             print('member '+str(member)+' is ignored')
         else:
             name = "r"+str(member)+"_lead_"+str(lead)+"_r.nc"
-            data = xr.open_dataset(path+name,chunks={'lon':'auto','lat':'auto'})
+            data = xr.open_dataset(path+name,chunks={'time':'auto','lon':'auto','lat':'auto'})
             ancillary.append(data)
             print('member '+str(member))
     data= xr.concat(ancillary, dim='member')
@@ -80,7 +80,7 @@ def open_era5(directory, file, variable):
         file():
         variable():
     """
-    era5_var = xr.open_dataset(directory+file,chunks='auto')
+    era5_var = xr.open_dataset(directory+file,chunks={'time':'auto','lon':'auto','lat':'auto'})
     if variable == 'pr':
         era5_var = era5_var.rename({'tp': 'pr'})
         era5_var = era5_var*1000
