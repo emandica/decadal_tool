@@ -48,8 +48,11 @@ def parametric_map_plot_polar(ds, ds_sign, levels, title=None, sign=0.95):
                    extend='both',
                    )
     
-    _ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k',
-                   alpha = 0.2, transform = ccrs.PlateCarree())
+    _ = ds_sign.plot.contourf(levels=[0,min_v,max_v,1],hatches=["...","","..."],
+                         transform = ccrs.PlateCarree(),alpha=0,add_colorbar=False)
+    
+    #_ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k',
+    #               alpha = 0.2, transform = ccrs.PlateCarree())
     
     #add coastlines
     ax.coastlines()

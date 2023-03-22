@@ -18,7 +18,7 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import constants as c
 
 def bootstrap_map_plot_polar(ds, ds_sign, levels, title=None, sign=0.95):
-    
+    #ax.set_ylim([-2.5,2.5])
     #plot significance
     if sign == 0.95:
         min_v = 0
@@ -31,8 +31,11 @@ def bootstrap_map_plot_polar(ds, ds_sign, levels, title=None, sign=0.95):
         max_v = -3
         
     ds = ds.where((ds[c.VAR] <= ds_sign[c.VAR][2,:,:]) | (ds[c.VAR] >= ds_sign[c.VAR][-3,:,:]))
-    neg = np.where(ds[c.VAR] <= ds_sign[c.VAR][min_v,:,:])
-    pos = np.where(ds[c.VAR] >= ds_sign[c.VAR][max_v,:,:])
+    #neg = np.where(ds[c.VAR] <= ds_sign[c.VAR][min_v,:,:])
+    #pos = np.where(ds[c.VAR] >= ds_sign[c.VAR][max_v,:,:])
+    neg = np.where(ds[c.VAR] <= ds_sign[c.VAR][min_v,:,:],-1,0)
+    pos = np.where(ds[c.VAR] >= ds_sign[c.VAR][max_v,:,:],1,0)
+    
     lons, lats = np.meshgrid(ds.lon, ds.lat) 
     
 #%%plot fields
@@ -45,8 +48,12 @@ def bootstrap_map_plot_polar(ds, ds_sign, levels, title=None, sign=0.95):
                    #cmap='bwr',
                    )
     
-    _ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
-    _ = ax.scatter(lons[pos], lats[pos], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
+    _ = ax.contourf(lons,lats,neg,levels=[-2,-1,1,2],hatches=["...","","..."],
+                    transform = ccrs.PlateCarree(),alpha=0)
+    _ = ax.contourf(lons,lats,pos,levels=[-1.1,-0.5,0.5,1.1],hatches=["...","","..."],
+                    transform = ccrs.PlateCarree(),alpha=0)
+    #_ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
+    #_ = ax.scatter(lons[pos], lats[pos], marker = '.', s = 1, c = 'k', alpha = 0.2, transform = ccrs.PlateCarree())
     
     #add coastlines
     ax.coastlines()

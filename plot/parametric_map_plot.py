@@ -8,7 +8,9 @@ Created on Mon Jan 30 15:25:43 2023
 
 import numpy as np
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+mpl.rcParams['hatch.linewidth'] = 0.5
 import matplotlib.ticker as mticker
 
 import cartopy.crs as ccrs
@@ -17,7 +19,7 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 
 import constants as c
 
-def parametric_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
+def parametric_map_plot(ds, ds_sign, levels,var=c.VAR, title=None, sign=0.95):
     
     #plot significance
     if sign == 0.95:
@@ -42,13 +44,16 @@ def parametric_map_plot(ds, ds_sign, levels, title=None, sign=0.95):
     
     ax = fig.add_subplot(111, projection=ccrs.PlateCarree())
     
-    p = ds[c.VAR].plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
+    p = ds[var].plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
                    add_labels=False, add_colorbar=False,
                    extend='both',
                    )
     
-    _ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k',
-                   alpha = 0.2, transform = ccrs.PlateCarree())
+    _ = ds_sign.plot.contourf(levels=[0,min_v,max_v,1],hatches=["...","","..."],
+                         transform = ccrs.PlateCarree(),alpha=0,add_colorbar=False)
+    
+    #_ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k',
+    #               alpha = 0.2, transform = ccrs.PlateCarree())
     
     #add coastlines
     ax.coastlines()
