@@ -31,7 +31,7 @@ def parametric_map_plot_no_antartica(ds, ds_sign, levels, var=c.VAR, title=None,
         max_v = 0.90
     
 # to use for correlation, to comment for bias
-    ds_sign = ds_sign.transpose('lat','lon')
+    #ds_sign = ds_sign.transpose('lat','lon')
     
 #%%plot fields
     fig = plt.figure(figsize=[12,8])
