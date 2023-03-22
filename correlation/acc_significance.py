@@ -36,11 +36,11 @@ def acc_significance(lead_exp,season):
 
     elif c.BOOTSTRAP == 'standard':
         
-        ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
-        sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
+        ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'_anomaly.nc', chunks={'lon':'auto','lat':'auto'})
+        sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'_anomaly.nc', chunks={'lon':'auto','lat':'auto'})
         delta1 = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_standard.nc', chunks={'lon':'auto','lat':'auto'})
         delta2 = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_standard.nc', chunks={'lon':'auto','lat':'auto'})
-        ref = xr.open_dataset(c.RUN_DIR+c.REF+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
+        ref = xr.open_dataset(c.RUN_DIR+c.REF+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'_anomaly.nc', chunks={'lon':'auto','lat':'auto'})
         
         """
         delta ACC
@@ -54,8 +54,8 @@ def acc_significance(lead_exp,season):
         ctl =ctl.mean('member')
         sens =sens.mean('member')
         
-        corr_ctl = xs.pearson_r_eff_p_value(ctl, ref.sel(time=slice(ctl.time[0],ctl.time[-1])), dim='time',keep_attrs=True)
-        corr_sens = xs.pearson_r_eff_p_value(sens, ref.sel(time=slice(ctl.time[0],ctl.time[-1])), dim='time',keep_attrs=True)
+        corr_ctl = xs.pearson_r_p_value(ctl, ref.sel(time=slice(ctl.time[0],ctl.time[-1])), dim='time',keep_attrs=True)
+        corr_sens = xs.pearson_r_p_value(sens, ref.sel(time=slice(ctl.time[0],ctl.time[-1])), dim='time',keep_attrs=True)
         
         """
         save file

@@ -10,7 +10,7 @@ import numpy as np
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-mpl.rcParams['hatch.linewidth'] = 0.5
+#mpl.rcParams['hatch.linewidth'] = 0.5
 import matplotlib.ticker as mticker
 
 import cartopy.crs as ccrs
@@ -32,19 +32,15 @@ def parametric_map_plot(ds, ds_sign, levels,var=c.VAR, title=None, sign=0.95):
         min_v = 0.10
         max_v = 0.90
         
-    #ds = ds.where((ds_sign <= 0.1) | (ds_sign >= 0.9))
-    neg = np.where((ds_sign <= min_v)|(ds_sign >= max_v))
-    lons, lats = np.meshgrid(ds.lon, ds.lat)    
-    
 # to use for correlation, to comment for bias
-    #neg = (neg[1],neg[0])
+    ds_sign = ds_sign.transpose('lat','lon')
     
 #%%plot fields
     fig = plt.figure(figsize=[12,8])
     
     ax = fig.add_subplot(111, projection=ccrs.PlateCarree())
     
-    p = ds[var].plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
+    p = ds[c.VAR].plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
                    add_labels=False, add_colorbar=False,
                    extend='both',
                    )
@@ -53,7 +49,7 @@ def parametric_map_plot(ds, ds_sign, levels,var=c.VAR, title=None, sign=0.95):
                          transform = ccrs.PlateCarree(),alpha=0,add_colorbar=False)
     
     #_ = ax.scatter(lons[neg], lats[neg], marker = '.', s = 1, c = 'k',
-    #               alpha = 0.2, transform = ccrs.PlateCarree())
+                   #alpha = 0.2, transform = ccrs.PlateCarree())
     
     #add coastlines
     ax.coastlines()

@@ -29,13 +29,9 @@ def parametric_map_plot_no_antartica(ds, ds_sign, levels, var=c.VAR, title=None,
     elif sign == 0.80:
         min_v = 0.10
         max_v = 0.90
-        
-    #ds = ds.where((ds_sign <= 0.1) | (ds_sign >= 0.9))
-    neg = np.where((ds_sign <= min_v)|(ds_sign >= max_v))
-    lons, lats = np.meshgrid(ds.lon, ds.lat)    
     
 # to use for correlation, to comment for bias
-    #neg = (neg[1],neg[0])
+    ds_sign = ds_sign.transpose('lat','lon')
     
 #%%plot fields
     fig = plt.figure(figsize=[12,8])

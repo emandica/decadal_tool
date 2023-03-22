@@ -158,7 +158,7 @@ def dataset_season(dset,season):
         mon = [11,12,1,2,3,4,5,6,7,8,9,10]
         
     dset = dset.sel(time=dset.time.dt.month.isin(mon))
-    dset = dset.rolling(time = len(mon)).mean()
+    dset = dset.rolling(time = len(mon)).mean('time')
     dset = dset.sel(time = dset.time.dt.month == mon[-1])
     
     return dset

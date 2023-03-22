@@ -14,6 +14,7 @@ import run_msss as rmsss
 import NAO_index as nao
 import AO_index as ao
 import global_bias_lead_time as gb
+import amv_index as amv
 
 import constants as c
 
@@ -40,14 +41,14 @@ if __name__ == '__main__':
     args=CLI.parse_args()
 
     SEASON = 'Clim' #args.SEASON
-    lead_exp = [1,2,3,4] #args.LEAD_LIST
+    lead_exp = [3,4] #args.LEAD_LIST
 
 #%%Mean bias
     if c.M_BIAS:
         rm.run_mbias(lead_exp, SEASON)
     
-    if c.G_BIAS:         
-        gb.global_bias(SEASON)
+    #if c.G_BIAS:         
+    #    gb.global_bias(SEASON)
 #%%Correlation
     if c.CORRELATION:
         rc.run_corr(lead_exp, SEASON)
@@ -67,3 +68,7 @@ if __name__ == '__main__':
 #%%AO
     if c.AO:
         ao.AO(lead_exp,SEASON)
+        
+#%%AMV
+    if c.AMV:
+        amv.AMV(lead_exp,SEASON)

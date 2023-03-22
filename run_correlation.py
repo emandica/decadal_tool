@@ -20,13 +20,13 @@ def run_corr(lead_exp, season):
 
     da_cor.aggr_datasets(lead_exp, season)
     print('data aggregation: OK')
-        
-    print('starting correlation')
 #%%level selection
     ls.level_sel(lead_exp, season)
-        
-    ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
-    sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
+    
+    print('starting correlation')
+    
+    ctl = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'_anomaly.nc', chunks={'lon':'auto','lat':'auto'})
+    sens = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'_anomaly.nc', chunks={'lon':'auto','lat':'auto'})
 #%%bootstrap
     rb.bootstrap(ctl,sens,lead_exp,season)
         
