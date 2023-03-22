@@ -47,7 +47,7 @@ def bias_plot(lead_exp, season):
 #%% 
     #%%tas
     if c.VAR == 'tas':
-        levels1=[-5,-4,-3,-2,-1,0,1,2,3,4,5]
+        levels1=[-5,-4,-3,-2,-1,-0.5,0.5,1,2,3,4,5]
         levels2=[-2.5,-2,-1.5,-1,-0.5,-0.1,0.1,0.5,1,1.5,2,2.5]
         delta=xr.where(delta.apply(np.fabs)<0.1, np.NaN , delta)
     #%%psl

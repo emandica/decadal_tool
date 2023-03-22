@@ -20,44 +20,44 @@ def bias_significance(lead_exp,season):
     delta1 = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_standard.nc', chunks={'lon':'auto','lat':'auto'})
     delta2 = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_standard.nc', chunks={'lon':'auto','lat':'auto'})
     ref = xr.open_dataset(c.RUN_DIR+c.REF+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_level_'+str(c.PLEV)+'.nc', chunks={'lon':'auto','lat':'auto'})
-
+    ref= ref.sel(time=slice(ctl.time[0],ctl.time[-1]))
     """
     mean bias
     """
-    mb_ctl = delta1 - ref.mean('time')
-    mb_sens = delta2 - ref.mean('time')
+    #mb_ctl = delta1 - ref.mean('time')
+    #mb_sens = delta2 - ref.mean('time')
     
     """
     ensemble mean
     """
-    #ctl=ctl.mean('member')
-    ctl=ctl.mean('time')
-    #sens=sens.mean('member')
-    sens=sens.mean('time')
-    ref = ref.mean('time')
+    ctl=ctl.mean('member')
+    #ctl=ctl.mean('time')
+    sens=sens.mean('member')
+    #sens=sens.mean('time')
+    #ref = ref.mean('time')
     
     """
     Bias p value
     """    
-    #_, p_ctl = stats.ttest_ind(ctl[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0, equal_var=False)    
-    _, p_ctl = stats.ttest_1samp(ctl[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0)    
-    #p_ctl = xr.DataArray(p_ctl, coords=ctl[c.VAR].mean('time').coords)
-    p_ctl = xr.DataArray(p_ctl, coords=ctl[c.VAR].mean('member').coords)
-    #ctl = ctl.mean('time')
-    ctl = ctl.mean('member')
+    _, p_ctl = stats.ttest_ind(ctl[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0, equal_var=False)    
+    #_, p_ctl = stats.ttest_1samp(ctl[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0)    
+    p_ctl = xr.DataArray(p_ctl, coords=ctl[c.VAR].mean('time').coords)
+    #p_ctl = xr.DataArray(p_ctl, coords=ctl[c.VAR].mean('member').coords)
+    ctl = ctl.mean('time')
+    #ctl = ctl.mean('member')
     
-#    _, p_sens = stats.ttest_ind(sens[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0, equal_var=False)
-    _, p_sens = stats.ttest_1samp(sens[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0)
-    #p_sens = xr.DataArray(p_sens, coords=sens[c.VAR].mean('time').coords)
-    p_sens = xr.DataArray(p_sens, coords=sens[c.VAR].mean('member').coords)
-    #sens = sens.mean('time')
-    sens = sens.mean('member')
+    _, p_sens = stats.ttest_ind(sens[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0, equal_var=False)
+#    _, p_sens = stats.ttest_1samp(sens[c.VAR].to_numpy(), ref[c.VAR].to_numpy(), axis=0)
+    p_sens = xr.DataArray(p_sens, coords=sens[c.VAR].mean('time').coords)
+    #p_sens = xr.DataArray(p_sens, coords=sens[c.VAR].mean('member').coords)
+    sens = sens.mean('time')
+    #sens = sens.mean('member')
 #%%
     """
     save files
     """
-    mb_ctl.to_netcdf(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_mbias_'+c.REF+'.nc')
-    mb_sens.to_netcdf(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_mbias_'+c.REF+'.nc')
+    #mb_ctl.to_netcdf(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_mbias_'+c.REF+'.nc')
+    #mb_sens.to_netcdf(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_mbias_'+c.REF+'.nc')
     
     ctl.to_netcdf(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_MBIAS.nc')
     sens.to_netcdf(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_MBIAS.nc')
