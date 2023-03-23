@@ -26,7 +26,7 @@ import cartopy.crs as ccrs
 
 import data_agg as da
 import level_selection as ls
-
+import nao_bootstrap as nbs
 import constants as c
 
 def pcs_check(var_eofs,var_pcs):
@@ -158,6 +158,15 @@ def NAO(lead_exp,season):
     ###
     ctl_nao_cor = xr.corr(nao_ctl_em_pcs, nao_era_pcs, dim='time').to_numpy().round(2)
     sens_nao_cor = xr.corr(nao_sens_em_pcs, nao_era_pcs, dim='time').to_numpy().round(2)
+    
+    d_corr = sens_nao_cor - ctl_nao_cor
+    
+    quant_corr = nbs.NAO_bootstrap(lead_exp, season)
+    
+    if d_corr < quant_corr[0] or d_corr>quant_corr[-1]:
+        sign = True
+    else:
+        sign = False
 #%%
     fig = plt.figure(figsize=[12,8])
     ax = fig.add_subplot(111)
@@ -171,7 +180,7 @@ def NAO(lead_exp,season):
     nao_era_pcs.plot(label=c.REF,c='k')
 
     ax.set_ylabel=('NAO index')
-    ax.set_title('NAO index, lead '+str(lead_exp)+', '+season)
+    ax.set_title('NAO index, lead '+str(lead_exp)+', '+season+', corr_sign=95% '+str(sign) )
     
     ax.set_ylim([-4,4])
     
