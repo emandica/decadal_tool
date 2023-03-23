@@ -11,7 +11,7 @@ import run_xsec as rx
 import run_mbias as rm
 import run_correlation as rc
 import run_msss as rmsss
-import NAO_index as nao
+import nao_index as nao
 import AO_index as ao
 import global_bias_lead_time as gb
 import amv_index as amv
@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     args=CLI.parse_args()
 
-    SEASON = 'Clim' #args.SEASON
+    SEASON = 'DJF' #args.SEASON
     lead_exp = [3,4] #args.LEAD_LIST
 
 #%%Mean bias
