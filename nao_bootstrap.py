@@ -78,4 +78,6 @@ def NAO_bootstrap(lead_exp,season):
 
     delta = d1_pcs_cor -d2_pcs_cor
     
-    quant = delta.quantile([0.025,0.05,0.10,0.90,0.95,0.975], dim='bootstrap')
+    quant_pcs_corr = delta.quantile([0.025,0.05,0.10,0.90,0.95,0.975], dim='bootstrap')
+    
+    return quant_pcs_corr
