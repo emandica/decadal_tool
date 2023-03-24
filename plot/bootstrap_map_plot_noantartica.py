@@ -32,15 +32,15 @@ def bootstrap_map_plot_no_antartica(ds, ds_sign, levels, title=None, sign=0.95):
     #ds = ds.where((ds[c.VAR] <= ds_sign[c.VAR][2,:,:]) | (ds[c.VAR] >= ds_sign[c.VAR][-3,:,:]))
     #neg = np.where(ds[c.VAR] <= ds_sign[c.VAR][min_v,:,:])
     #pos = np.where(ds[c.VAR] >= ds_sign[c.VAR][max_v,:,:])
-    neg = np.where(ds[c.VAR] <= ds_sign[c.VAR][min_v,:,:],-1,0)
-    pos = np.where(ds[c.VAR] >= ds_sign[c.VAR][max_v,:,:],1,0)
+    neg = np.where(ds <= ds_sign[min_v,:,:],-1,0)
+    pos = np.where(ds >= ds_sign[max_v,:,:],1,0)
     lons, lats = np.meshgrid(ds.lon, ds.lat) 
     
 #%%plot fields
     fig = plt.figure(figsize=[12,8])
     ax = fig.add_subplot(111, projection=ccrs.PlateCarree())
     
-    p = ds[c.VAR].plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
+    p = ds.plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
                    add_labels=False, add_colorbar=False,
                    extend='both'
                    )

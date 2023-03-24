@@ -39,7 +39,7 @@ def parametric_map_plot_polar(ds, ds_sign, levels, title=None, sign=0.95):
     
     ax = fig.add_subplot(111, projection=ccrs.Orthographic(central_longitude=0,central_latitude=90))
     
-    p = ds[c.VAR].plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
+    p = ds.plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
                    add_labels=False, add_colorbar=False,
                    extend='both',
                    )
