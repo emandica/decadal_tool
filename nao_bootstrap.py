@@ -7,7 +7,7 @@ Created on Wed Mar 22 10:05:51 2023
 """
 
 import numpy as np
-
+import xskillscore as xs
 from eofs.xarray import Eof
 
 import xarray as xr
@@ -48,6 +48,7 @@ def nao_loop(dset):
     for i in range(1000):
         dset_mem = dset.isel({'bootstrap':i})
         anci1,anci2=nao_index_eofs(dset_mem)
+        anci2,anci2 = pcs_check(anci2,anci1)
         nao_pcs.append(anci1)
         nao_eofs.append(anci2)
     nao_pcs = xr.concat(nao_pcs, dim='bootstrap')
@@ -68,7 +69,7 @@ def NAO_bootstrap(lead_exp,season):
         
     delta1 = xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_standard.nc')
     delta2 = xr.open_dataset(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_standard.nc')        
-    era_pcs = xr.open_dataset(c.RUN_DIR+c.REF+'_nao_index_lead'+str(lead_exp)+'_'+season+'.nc')
+    era_pcs = xr.open_dataset(c.RUN_DIR+c.REF+'_nao_index_lead'+str(lead_exp)+'_'+season+'_'+str(c.T_START)+'.nc')
     
     nao_d1_pcs, nao_d1_eofs=nao_loop(delta1[c.VAR])
     nao_d2_pcs, nao_d2_eofs=nao_loop(delta2[c.VAR])
@@ -79,5 +80,5 @@ def NAO_bootstrap(lead_exp,season):
     delta = d1_pcs_cor -d2_pcs_cor
     
     quant_pcs_corr = delta.quantile([0.025,0.05,0.10,0.90,0.95,0.975], dim='bootstrap')
-    
+    quant_pcs_corr.to_netcdf(c.RUN_DIR+'nao_quantile_delta_bootstrap_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'.nc')    
     return quant_pcs_corr
