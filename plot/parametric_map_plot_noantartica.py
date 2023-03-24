@@ -38,7 +38,7 @@ def parametric_map_plot_no_antartica(ds, ds_sign, levels, var=c.VAR, title=None,
     
     ax = fig.add_subplot(111, projection=ccrs.PlateCarree())
     
-    p = ds[var].plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
+    p = ds.plot(ax=ax, levels=levels, transform=ccrs.PlateCarree(),
                    add_labels=False, add_colorbar=False,
                    extend='both',
                    )
