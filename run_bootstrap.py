@@ -12,11 +12,11 @@ import constants as c
 import b_bootstrap as b
 import generic_routines as cr
 ###############################################################################
-def bootstrap(ctl, sens, lead_exp, season):
+def bootstrap(ctl, sens, lead_exp, season,rep=1000):
     
     if c.BOOTSTRAP=='block':
-        ctl = b.block_bootstrap(ctl,1000)
-        sens = b.block_bootstrap(sens,1000)
+        ctl = b.block_bootstrap(ctl,rep)
+        sens = b.block_bootstrap(sens,rep)
     
         ctl.to_netcdf(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap.nc')
         ctl.close()
@@ -30,11 +30,11 @@ def bootstrap(ctl, sens, lead_exp, season):
         
         dset= xr.open_dataset(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_concat.nc', chunks={'lon':'auto', 'lat':'auto'})
         
-        dset1= b.standard_bootstrap(dset,1000)
+        dset1= b.standard_bootstrap(dset,rep)
         dset1.to_netcdf(c.RUN_DIR+c.NAME_CTL+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_standard.nc')
         dset1.close()
         
-        dset2= b.standard_bootstrap(dset,1000)
+        dset2= b.standard_bootstrap(dset,rep)
         dset2.to_netcdf(c.RUN_DIR+c.NAME_SENS+'_'+c.VAR+'_lead'+str(lead_exp)+'_'+season+'_s'+str(c.T_START)+'_bootstrap_standard.nc')
         dset2.close()
     

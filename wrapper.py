@@ -14,7 +14,7 @@ import run_msss as rmsss
 import nao_index as nao
 import AO_index as ao
 import global_bias_lead_time as gb
-import amv_index as amv
+#import amv_index as amv
 
 import constants as c
 
@@ -40,8 +40,8 @@ if __name__ == '__main__':
 
     args=CLI.parse_args()
 
-    SEASON = 'DJF' #args.SEASON
-    lead_exp = [3,4] #args.LEAD_LIST
+    SEASON = args.SEASON
+    lead_exp = args.LEAD_LIST
 
 #%%Mean bias
     if c.M_BIAS:
@@ -70,5 +70,5 @@ if __name__ == '__main__':
         ao.AO(lead_exp,SEASON)
         
 #%%AMV
-    if c.AMV:
-        amv.AMV(lead_exp,SEASON)
+#    if c.AMV:
+#        amv.AMV(lead_exp,SEASON)
