@@ -41,7 +41,7 @@ if __name__ == '__main__':
     args=CLI.parse_args()
 
     SEASON = args.SEASON
-    lead_exp = args.LEAD_LIST
+    lead_exp = [3,4]#args.LEAD_LIST
 
 #%%Mean bias
     if c.M_BIAS:

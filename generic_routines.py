@@ -55,7 +55,7 @@ def lead_aggregation(lead, var, number, name,t_start, no_member):
         
         date_start = str(time_start)+"-11"
         
-        path = c.FILE_DIR+name+"/"+var+"/lead_"+str(sub_lead)+"/"
+        path = c.FILE_DIR+name+"/monthly/"+var+"/lead_"+str(sub_lead)+"/"
 
         dset = open_dataset(path, sub_lead, number,
                             time_start=date_start,
