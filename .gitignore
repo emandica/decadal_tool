@@ -1,0 +1,29 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# --- Jupyter ---
+# gli output dei notebook non vanno versionati (usare nbstripout)
+# le figure finali stanno in figures/, non incorporate nei notebook
+
+# --- Dati e output di calcolo (stanno sul cluster, non nel repo) ---
+*.nc
+*.grib
+*.grb
+*.zarr/
+
+# --- Backup locale full-res e materiale da rivedere (non versionare) ---
+figures_fullres_backup/
+_review/
+
+# --- Log e temporanei ---
+*.log
+process_log.txt
+*.out
+*.tmp
+
+# --- Sistema ---
+.DS_Store
+Thumbs.db
