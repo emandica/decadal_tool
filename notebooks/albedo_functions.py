@@ -309,6 +309,34 @@ def bootstrap_quantile_correlation(sens, ctrl, ref, iterations=1000):
     return sig_delta
 
 ##################################################################################
+def bootstrap_acc_significance(sens_anom, ctrl_anom, ref_anom, iterations=1000, alpha=0.05):
+    """Significativita' della differenza di ACC (media d'ensemble) SENS vs CTRL,
+    per serie temporali globali (dim member, time) — variante di
+    bootstrap_quantile_correlation senza dimensioni spaziali.
+
+    Costruisce la distribuzione nulla di Delta-ACC ricampionando i membri del
+    pool combinato (SENS+CTRL) e confronta la differenza osservata con i quantili.
+
+    Parametri:
+        sens_anom, ctrl_anom (xarray.DataArray): anomalie con dim (member, time).
+        ref_anom (xarray.DataArray): anomalie di riferimento con dim (time).
+        iterations (int): iterazioni di bootstrap.
+        alpha (float): livello (0.05 = 95% a due code).
+
+    Ritorna:
+        float: 1.0 se la differenza osservata cade fuori dai quantili nulli, altrimenti 0.0.
+    """
+    combined = xr.concat([sens_anom, ctrl_anom], dim='member')
+    f_a = xs.resampling.resample_iterations(combined, iterations, 'member', replace=True).mean('member')
+    f_b = xs.resampling.resample_iterations(combined, iterations, 'member', replace=True).mean('member')
+    delta_null = (xs.pearson_r(f_a, ref_anom, 'time', skipna=True)
+                  - xs.pearson_r(f_b, ref_anom, 'time', skipna=True))
+    lo, hi = delta_null.quantile([alpha / 2, 1 - alpha / 2], dim='iteration').values
+    obs = (float(xs.pearson_r(sens_anom.mean('member'), ref_anom, 'time', skipna=True))
+           - float(xs.pearson_r(ctrl_anom.mean('member'), ref_anom, 'time', skipna=True)))
+    return float((obs < lo) or (obs > hi))
+
+##################################################################################
 def bootstrap_single_correlation(ds, ref, iterations=1000):
     # Optimize chunking for ds and ref
     ds = ds.chunk({'time': -1, 'member': -1})
