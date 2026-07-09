@@ -16,6 +16,7 @@ Il confronto è tra due set di esperimenti DCPP:
 decadal_tool/
 ├── environment.yml        # ambiente conda per eseguire i notebook
 ├── notebooks/             # pipeline di calcolo e plotting
+│   ├── config.py             # percorsi centralizzati (radice sovrascrivibile via env)
 │   ├── albedo_functions.py   # funzioni condivise (griglie, medie, plotting mappe)
 │   ├── NN-<nome>.ipynb       # notebook di CALCOLO   -> salva .nc intermedi
 │   ├── NN-FigN_<nome>.ipynb  # notebook di PLOTTING  -> genera le figure
@@ -54,9 +55,17 @@ conda activate decadal
 jupyter lab
 ```
 
-## Dati
+## Dati e percorsi
 
-> **Nota.** I notebook leggono attualmente i dati da percorsi assoluti del
-> cluster di calcolo (`/confess/dicarlo/...`). La centralizzazione dei percorsi
-> in un file di configurazione è il passo successivo (vedi issue/TODO). I dataset
-> grezzi non sono inclusi nel repository per dimensione.
+Tutti i percorsi dei dati sono centralizzati in [`notebooks/config.py`](notebooks/config.py)
+e derivano da un'unica radice. Sul cluster di calcolo la radice è `/confess/dicarlo`
+(default); per eseguire altrove basta impostare una variabile d'ambiente prima di
+avviare Jupyter:
+
+```bash
+export DECADAL_DATA_ROOT=/percorso/locale/ai/dati
+jupyter lab
+```
+
+I dataset grezzi (esperimenti, rianalisi ERA5, boundary conditions) **non** sono
+inclusi nel repository per dimensione: risiedono sul cluster sotto la radice sopra.
