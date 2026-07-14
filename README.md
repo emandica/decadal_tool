@@ -44,8 +44,13 @@ Ogni figura nasce da una **coppia** di notebook:
 | Fig. 2 | `02-Fig2_lai_trend` · `02-Fig2_effective_lai_trend` · `02-Fig2_cv_trend` | Trend delle stesse variabili |
 | Fig. 3 | `03-Fig3_global_bias_tas` | Bias globale della temperatura (tas) |
 | Fig. 4 | `04-Fig4_BIAS_plot` (calcolo: `04-BIAS`) | Mappe di bias |
-| Fig. 5 | `05-Serie_temporale_anomalie` · `05-Fig5_global_acc` | Serie temporali delle anomalie / ACC globale |
+| Fig. 5 | `05-Serie_temporale_anomalie` · `05-Fig5_global_acc` (calcolo: `05-global_acc`) | Serie temporali delle anomalie / ACC di media d'area per lead time e per combinazioni di lead year (con significatività bootstrap) |
+| Mappe ACC | `ACC_plot` (calcolo: `yearly_ACC_calculation` · `seasonal_ACC_calculation`) | Mappe spaziali di ACC (anomaly correlation) con significatività bootstrap |
 | Suppl. | `altre_figure/`, `seasons/` | Cover, LAI e varianti stagionali |
+
+> I notebook seguono in gran parte la convenzione `NN-<nome>` (calcolo) + `NN-FigN_<nome>`
+> (plotting); alcuni ausiliari (es. `ACC_plot`, `yearly_ACC_calculation`) hanno nomi propri.
+> Ogni notebook scrive il proprio log in `<nome-notebook>.log` (non versionato).
 
 ## Ambiente
 
