@@ -331,7 +331,10 @@ def bootstrap_acc_significance(sens_anom, ctrl_anom, ref_anom, iterations=1000, 
     f_b = xs.resampling.resample_iterations(combined, iterations, 'member', replace=True).mean('member')
     delta_null = (xs.pearson_r(f_a, ref_anom, 'time', skipna=True)
                   - xs.pearson_r(f_b, ref_anom, 'time', skipna=True))
-    lo, hi = delta_null.quantile([alpha / 2, 1 - alpha / 2], dim='iteration').values
+    # compute esplicito + np.quantile: evita l'errore di .quantile su dask con
+    # piu' chunk lungo 'iteration' (la variante spaziale usa .chunk(iteration=-1))
+    delta_vals = np.asarray(delta_null.compute()).ravel()
+    lo, hi = np.quantile(delta_vals, [alpha / 2, 1 - alpha / 2])
     obs = (float(xs.pearson_r(sens_anom.mean('member'), ref_anom, 'time', skipna=True))
            - float(xs.pearson_r(ctrl_anom.mean('member'), ref_anom, 'time', skipna=True)))
     return float((obs < lo) or (obs > hi))
