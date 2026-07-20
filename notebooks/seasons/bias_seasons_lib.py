@@ -39,6 +39,11 @@ def _load(save_path, fname, v):
         return ds[v].load()
 
 
+def _plot_one(args):
+    """Adattatore per Pool.imap_unordered (che passa un solo argomento: una tupla)."""
+    return plot_bias_season(*args)
+
+
 def plot_bias_season(exp_ctrl, exp_sens, var, y1, y2, season, save_path):
     """Mappe di bias (control / sensitivity) per un range di lead year e una stagione."""
     lead = f"{y1}-{y2}"
