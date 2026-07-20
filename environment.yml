@@ -3,16 +3,44 @@ channels:
   - conda-forge
 dependencies:
   - python=3.10
+
+  # --- core scientifico ---
   - numpy
   - scipy
   - pandas
   - xarray
   - netcdf4
+  - cftime             # calendari climatici non standard (360-day, noleap)
+  - h5netcdf           # backend netCDF alternativo
   - dask
   - distributed
   - xskillscore
+
+  # --- grafica ---
   - matplotlib
-  - seaborn
+  - seaborn            # boxplot di Fig3, Fig5 e serie temporale anomalie
   - cartopy
+
+  # --- analisi ---
+  - eofs
+  - xeofs
+  - scikit-learn
+  - statsmodels        # decadal_trend, trend_correction_CDF
+  - numba
+
+  # --- ambiente ---
   - psutil
   - jupyterlab
+  - ipyparallel
+
+  # --- climpred / cataloghi ESM: decommentare se servono i notebook in climpred/ ---
+  # - climpred
+  # - intake
+  # - intake-esm
+  # - ecgtools
+
+  # --- utility opzionali (erano in analysis_tool, non usate dalla pipeline principale) ---
+  # - dask-jobqueue    # sottomissione job su cluster (tile_cover)
+  # - python-graphviz  # visualizzazione grafi dask (parallel_nao_regression)
+  # - pillow           # combine_regression_plots
+  # - tensorflow       # solo ML_LAI: molto pesante, meglio un ambiente separato
