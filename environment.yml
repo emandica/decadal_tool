@@ -31,6 +31,7 @@ dependencies:
   # --- ambiente ---
   - psutil
   - jupyterlab
+  - ipykernel          # necessario per usare questo env come kernel nei notebook
   - ipyparallel
 
   # --- climpred / cataloghi ESM: decommentare se servono i notebook in climpred/ ---
