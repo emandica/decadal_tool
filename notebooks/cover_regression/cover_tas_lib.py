@@ -103,9 +103,40 @@ def _era5_obs(era_var, lead_number):
     return obs
 
 
-def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_out):
+def _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel):
+    """Come af.lr_plot, ma senza i due difetti che la rendono inadatta alla
+    cover (i cui delta sono ~100x piu' piccoli di quelli dell'albedo):
+    (1) limiti degli assi FISSI a [-1,2] (qui: automatici, con margine);
+    (2) etichette 'time' convertite in anno (int) passate a pd.to_datetime,
+    che le interpreta come nanosecondi dall'epoca Unix -> tutte '1970'
+    (qui: l'anno e' gia' un intero, si annota direttamente)."""
+    fig, ax = plt.subplots(figsize=[10, 8])
+    ax.scatter(box_x, box_y, label="Dati", c="blue", alpha=0.7)
+    ax.plot(box_x, y_pred, color="red", linewidth=2,
+            label=f"Retta di regressione (p={p:.2f}, r={r:.2f})")
+
+    if hasattr(box_x, "time"):
+        for xi, yi, year in zip(box_x.values, box_y.values, box_x["time"].values):
+            ax.annotate(int(year), (xi, yi), fontsize=10, color="black")
+
+    xpad = 0.1 * (box_x.values.max() - box_x.values.min() or 1)
+    ypad = 0.1 * (box_y.values.max() - box_y.values.min() or 1)
+    ax.set_xlim(box_x.values.min() - xpad, box_x.values.max() + xpad)
+    ax.set_ylim(box_y.values.min() - ypad, box_y.values.max() + ypad)
+
+    ax.set_title(title, fontsize=18)
+    ax.set_xlabel(xlabel, fontsize=16)
+    ax.set_ylabel(ylabel, fontsize=16)
+    ax.tick_params(axis="both", labelsize=12)
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(fontsize=12, loc="best")
+    plt.tight_layout()
+
+
+def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_out,
+                            xlabel="delta cover", ylabel="delta tas"):
     """Regressione per pixel (mappa, af.map_plot) + regressione scalare sul box
-    Siberia (scatter, af.lr_plot). delta_x, delta_y: (time=anno, lat, lon),
+    Siberia (scatter, _scatter_plot). delta_x, delta_y: (time=anno, lat, lon),
     gia' allineati sugli stessi anni."""
     slope_map, p_map = xr.apply_ufunc(
         _slope_pvalue, delta_x, delta_y,
@@ -123,7 +154,7 @@ def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_ou
     slope, intercept, r, p, std_err = stats.linregress(box_x.values, box_y.values)
     y_pred = slope * box_x.values + intercept
 
-    af.lr_plot(box_x, box_y, y_pred, p, r, title=title)
+    _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel)
     plt.savefig(png_scatter, dpi=300, bbox_inches="tight")
     plt.close("all")
 
@@ -162,6 +193,7 @@ def run_one_adapted(args):
             delta_cover, delta_tas, title,
             f"{save_path}/{title}_map.png", f"{save_path}/{title}_scatter.png",
             f"{POST_DATA}/adapted_regression_{var}_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel=f"delta {var} (SENS-CTRL)", ylabel="delta tas (SENS-CTRL, K)",
         )
         return f"{var} {lead} ok ({delta_tas.sizes['time']} anni)"
     except Exception as e:
@@ -213,6 +245,7 @@ def run_one_literal(args):
             delta_cover, delta_tas, title,
             f"{save_path}/{title}_map.png", f"{save_path}/{title}_scatter.png",
             f"{POST_DATA}/literal_regression_{var}_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel=f"delta skill {var} (SENS-CTRL)", ylabel="delta skill tas (SENS-CTRL)",
         )
         return f"{var} {lead} ok ({delta_tas.sizes['time']} anni)"
     except Exception as e:
