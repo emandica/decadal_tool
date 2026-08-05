@@ -216,16 +216,19 @@ def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_ou
 
 
 def _slope_pvalue_full(a, b):
-    """Come _slope_pvalue, ma calcola ANCHE la correlazione di rango di
-    Spearman accanto alla regressione lineare di Pearson: la relazione tra
-    delta_cover e delta_skill_tas potrebbe essere monotona ma non lineare,
-    e Spearman la cattura mentre scipy.stats.linregress no."""
+    """Come _slope_pvalue, ma calcola ANCHE il coefficiente di correlazione r
+    di Pearson (limitato in [-1,1], a differenza dello slope) e la
+    correlazione di rango di Spearman: la relazione tra delta_cover e
+    delta_skill_tas potrebbe essere monotona ma non lineare, e confrontare r
+    (lineare) con rho (monotona) lo rivela - a differenza di slope vs rho, che
+    non sono direttamente comparabili (slope non e' limitato, dipende dalle
+    unita' delle due variabili; r e rho sono entrambi in [-1,1])."""
     mask = ~np.isnan(a) & ~np.isnan(b)
     if np.sum(mask) < 3 or np.all(a[mask] == a[mask][0]):
-        return np.nan, np.nan, np.nan, np.nan
+        return np.nan, np.nan, np.nan, np.nan, np.nan
     slope, intercept, r, p, std_err = stats.linregress(a[mask], b[mask])
     rho, p_spear = stats.spearmanr(a[mask], b[mask])
-    return slope, p, rho, p_spear
+    return slope, r, p, rho, p_spear
 
 
 def _auto_levels(data, n=10):
@@ -246,19 +249,29 @@ def _auto_levels(data, n=10):
 
 
 def _map_and_box_regression_hybrid(delta_x, delta_y, title, png_base, nc_out, xlabel, ylabel):
-    """Come _map_and_box_regression, ma con DUE mappe (Pearson slope e Spearman
-    rho, ciascuna con la propria significativita') e lo scatter con entrambe le
-    statistiche in legenda. Usata solo da run_one_hybrid (notebook 03)."""
-    slope_map, p_map, rho_map, p_spear_map = xr.apply_ufunc(
+    """Come _map_and_box_regression, ma con TRE mappe (Pearson slope, Pearson r
+    e Spearman rho, ciascuna con la propria significativita') e lo scatter con
+    entrambe le statistiche in legenda. Usata solo da run_one_hybrid (notebook 03).
+
+    r e rho usano la STESSA scala/colormap (entrambi in [-1,1]) apposta, per
+    essere confrontabili a colpo d'occhio: se divergono, la relazione e'
+    monotona ma non lineare. Lo slope resta su una mappa separata (unita'
+    reali, non limitato) perche' non e' la stessa cosa di una correlazione."""
+    slope_map, r_map, p_map, rho_map, p_spear_map = xr.apply_ufunc(
         _slope_pvalue_full, delta_x, delta_y,
         input_core_dims=[["time"], ["time"]],
-        vectorize=True, output_dtypes=[float, float, float, float],
-        output_core_dims=[[], [], [], []],
+        vectorize=True, output_dtypes=[float, float, float, float, float],
+        output_core_dims=[[], [], [], [], []],
     )
 
     af.map_plot(slope_map, p_map, levels=_auto_levels(slope_map),
                title=f"{title} (Pearson, slope)", cmap="bwr")
     plt.savefig(f"{png_base}_map_pearson.png", dpi=300, bbox_inches="tight")
+    plt.close("all")
+
+    af.map_plot(r_map, p_map, levels=[-1, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 1],
+               title=f"{title} (Pearson, r)", cmap="PuOr")
+    plt.savefig(f"{png_base}_map_pearson_r.png", dpi=300, bbox_inches="tight")
     plt.close("all")
 
     af.map_plot(rho_map, p_spear_map, levels=[-1, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 1],
