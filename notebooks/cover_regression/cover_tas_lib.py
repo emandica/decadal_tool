@@ -166,6 +166,32 @@ def _glass_obs(lead_number):
     return obs
 
 
+def _load_snow_ensemble(exp, lead, var="snd"):
+    """Media d'ensemble di neve per un lead-year combo (annuale). Stesso pattern
+    di file di _load_tas_ensemble/_load_albedo_ensemble. Variabile di default
+    'snd' (snow depth); 'sd' dovrebbe essere equivalente, cambiare qui se serve.
+    Per 'snd' la longitudine nei file postprocessati non e' in [0,360] ne'
+    ordinata: stesso fix gia' presente (ma mai eseguito) in
+    05-Serie_temporale_anomalie.ipynb / seasonal_ACC_calculation.ipynb."""
+    ds = xr.open_dataset(
+        POST_DATA / exp / "1x1" / var /
+        f"{exp}_{var}_Amon_EC-Earth3_dcppA-hindcast_lead_{lead}_1x1_ensemble_rad.nc")
+    if var == "snd":
+        ds = ds.assign_coords(lon=ds["lon"] % 360).sortby("lon")
+    em = ds[var].mean("member")
+    em = em.assign_coords(time=pd.to_datetime(em["time"].values).year)
+    return em
+
+
+def _era5_snow_obs(lead_number, var="snd"):
+    """Osservazioni ERA5 di neve, obs indipendente vera come per tas/albedo:
+    nessun disegno ibrido necessario. Il nome della variabile nel file obs
+    coincide gia' con 'var' (nessun rename, a differenza di alb/tas)."""
+    obs = xr.open_dataset(WORK_DIR / f"ERA5_{var}_1x1_{lead_number}year.nc")
+    obs = obs[var].assign_coords(time=pd.to_datetime(obs["time"].values).year)
+    return obs
+
+
 def _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel, rho=None, p_spearman=None):
     """Come af.lr_plot, ma senza i due difetti che la rendono inadatta alla
     cover (i cui delta sono ~100x piu' piccoli di quelli dell'albedo):
@@ -519,3 +545,112 @@ def run_one_cover_albedo(args):
         return f"{var} {lead} ok ({delta_skill_albedo.sizes['time']} anni)"
     except Exception as e:
         return f"{var} {lead} ERRORE: {type(e).__name__}: {e}"
+
+
+def run_one_cover_snow(args):
+    """X = delta_cover (non circolare, come Notebook 1/3/4). Y = delta_skill_snow
+    (skill vs ERA5). Come l'albedo, la neve e' libera/prognostica in entrambi
+    gli esperimenti e ha un'osservazione indipendente vera: nessun disegno
+    ibrido necessario, skill-vs-skill pulito per entrambi SENS e CTRL. Stesso
+    schema di run_one_cover_albedo, variabile 'snd' al posto di 'alb'."""
+    exp_ctrl, exp_sens, var, y1, y2, save_path, snow_var = args
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+    try:
+        # --- Y: delta skill neve (vs ERA5, genuino per entrambi) ---
+        snow_ctrl = _load_snow_ensemble(exp_ctrl, lead, snow_var)
+        snow_sens = _load_snow_ensemble(exp_sens, lead, snow_var)
+        obs_snow = _era5_snow_obs(lead_number, snow_var)
+        snow_ctrl, obs_snow_c = xr.align(snow_ctrl, obs_snow, join="inner")
+        snow_sens, obs_snow_s = xr.align(snow_sens, obs_snow, join="inner")
+
+        anom_ctrl = snow_ctrl - snow_ctrl.mean("time")
+        anom_sens = snow_sens - snow_sens.mean("time")
+        anom_obs_c = obs_snow_c - obs_snow_c.mean("time")
+        anom_obs_s = obs_snow_s - obs_snow_s.mean("time")
+        skill_snow_ctrl = (anom_ctrl * anom_obs_c) / (snow_ctrl.std("time") * obs_snow_c.std("time"))
+        skill_snow_sens = (anom_sens * anom_obs_s) / (snow_sens.std("time") * obs_snow_s.std("time"))
+        skill_snow_ctrl, skill_snow_sens = xr.align(skill_snow_ctrl, skill_snow_sens, join="inner")
+        delta_skill_snow = skill_snow_sens - skill_snow_ctrl
+
+        # --- X: delta cover (non circolare) ---
+        cov_ctrl = _load_cover(exp_ctrl, var)
+        cov_sens = _load_cover(exp_sens, var)
+        cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+        cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+        cov_anom_sens = cov_sens - cov_sens.mean("time")
+        delta_cover = cov_anom_sens - cov_anom_ctrl
+        delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)
+
+        delta_skill_snow, delta_cover = xr.align(delta_skill_snow, delta_cover, join="inner")
+        if delta_skill_snow.sizes.get("time", 0) < 3:
+            return f"{var} {lead} SALTATO: solo {delta_skill_snow.sizes.get('time', 0)} anni in comune"
+
+        title = f"cover_snow_delta_skill_{snow_var}_vs_delta_{var}_{lead}"
+        _map_and_box_regression_hybrid(
+            delta_cover, delta_skill_snow, title,
+            f"{save_path}/{title}",
+            f"{POST_DATA}/cover_snow_regression_{var}_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel=f"delta {var} (SENS-CTRL)", ylabel=f"delta skill {snow_var} (SENS-CTRL, vs ERA5)",
+        )
+        return f"{var} {lead} ok ({delta_skill_snow.sizes['time']} anni)"
+    except Exception as e:
+        return f"{var} {lead} ERRORE: {type(e).__name__}: {e}"
+
+
+def run_one_albedo_snow(args):
+    """X = delta_skill_albedo (vs GLASS), Y = delta_skill_snow (vs ERA5).
+    Confronto skill-vs-skill diretto: entrambe le variabili sono libere in
+    SENS e CTRL e hanno un'osservazione indipendente vera, nessuna circolarita'
+    e nessun trucco ibrido necessario (a differenza della cover). Nessuna
+    variabile 'var' da ciclare: un solo confronto per lead-year combo."""
+    exp_ctrl, exp_sens, y1, y2, save_path, snow_var = args
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+    try:
+        # --- X: delta skill albedo (vs GLASS) ---
+        alb_ctrl = _load_albedo_ensemble(exp_ctrl, lead)
+        alb_sens = _load_albedo_ensemble(exp_sens, lead)
+        obs_alb = _glass_obs(lead_number)
+        alb_ctrl, obs_alb_c = xr.align(alb_ctrl, obs_alb, join="inner")
+        alb_sens, obs_alb_s = xr.align(alb_sens, obs_alb, join="inner")
+
+        anom_ctrl = alb_ctrl - alb_ctrl.mean("time")
+        anom_sens = alb_sens - alb_sens.mean("time")
+        anom_obs_c = obs_alb_c - obs_alb_c.mean("time")
+        anom_obs_s = obs_alb_s - obs_alb_s.mean("time")
+        skill_alb_ctrl = (anom_ctrl * anom_obs_c) / (alb_ctrl.std("time") * obs_alb_c.std("time"))
+        skill_alb_sens = (anom_sens * anom_obs_s) / (alb_sens.std("time") * obs_alb_s.std("time"))
+        skill_alb_ctrl, skill_alb_sens = xr.align(skill_alb_ctrl, skill_alb_sens, join="inner")
+        delta_skill_albedo = skill_alb_sens - skill_alb_ctrl
+
+        # --- Y: delta skill neve (vs ERA5) ---
+        snow_ctrl = _load_snow_ensemble(exp_ctrl, lead, snow_var)
+        snow_sens = _load_snow_ensemble(exp_sens, lead, snow_var)
+        obs_snow = _era5_snow_obs(lead_number, snow_var)
+        snow_ctrl, obs_snow_c = xr.align(snow_ctrl, obs_snow, join="inner")
+        snow_sens, obs_snow_s = xr.align(snow_sens, obs_snow, join="inner")
+
+        anom_ctrl_s = snow_ctrl - snow_ctrl.mean("time")
+        anom_sens_s = snow_sens - snow_sens.mean("time")
+        anom_obs_sc = obs_snow_c - obs_snow_c.mean("time")
+        anom_obs_ss = obs_snow_s - obs_snow_s.mean("time")
+        skill_snow_ctrl = (anom_ctrl_s * anom_obs_sc) / (snow_ctrl.std("time") * obs_snow_c.std("time"))
+        skill_snow_sens = (anom_sens_s * anom_obs_ss) / (snow_sens.std("time") * obs_snow_s.std("time"))
+        skill_snow_ctrl, skill_snow_sens = xr.align(skill_snow_ctrl, skill_snow_sens, join="inner")
+        delta_skill_snow = skill_snow_sens - skill_snow_ctrl
+
+        delta_skill_albedo, delta_skill_snow = xr.align(delta_skill_albedo, delta_skill_snow, join="inner")
+        if delta_skill_albedo.sizes.get("time", 0) < 3:
+            return f"{lead} SALTATO: solo {delta_skill_albedo.sizes.get('time', 0)} anni in comune"
+
+        title = f"albedo_snow_delta_skill_{snow_var}_vs_delta_skill_albedo_{lead}"
+        _map_and_box_regression_hybrid(
+            delta_skill_albedo, delta_skill_snow, title,
+            f"{save_path}/{title}",
+            f"{POST_DATA}/albedo_snow_regression_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel="delta skill albedo (SENS-CTRL, vs GLASS)", ylabel=f"delta skill {snow_var} (SENS-CTRL, vs ERA5)",
+        )
+        return f"{lead} ok ({delta_skill_albedo.sizes['time']} anni)"
+    except Exception as e:
+        return f"{lead} ERRORE: {type(e).__name__}: {e}"
