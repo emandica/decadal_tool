@@ -234,6 +234,49 @@ def debug_snow_load(exp_ctrl, exp_sens, y1, y2, var="snd"):
     print(f"  time raw (n={traw_obs.size}): {traw_obs[:5]} ... {traw_obs[-3:]}" if traw_obs.size > 8 else f"  time raw: {traw_obs}")
 
 
+def debug_snow_lon(exp_ctrl, exp_sens, y1, y2, var="snd"):
+    """Trovato con debug_snow_pipeline: dopo xr.align(snow_ctrl, obs) 'lon'
+    diventa size 0 (intersezione vuota), ma xr.align(snow_sens, obs) resta a
+    360 - quindi la griglia lon GREZZA di CTRL e SENS non e' identica, e il
+    fix %360+sortby (aggiunto per analogia con codice mai eseguito) la rompe
+    per uno dei due. Confronta le griglie lon effettive, prima e dopo il fix,
+    contro l'obs, per capire quale file ha davvero bisogno del fix (se uno)."""
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+
+    def lon_info(lon, label):
+        v = lon.values if hasattr(lon, "values") else lon
+        print(f"  {label}: n={v.size}  min={v.min():.4f}  max={v.max():.4f}"
+              f"  primi 5={v[:5]}  ultimi 5={v[-5:]}  sorted={bool((v[:-1] <= v[1:]).all())}")
+
+    lons = {}
+    for label, exp in [("CTRL", exp_ctrl), ("SENS", exp_sens)]:
+        path = POST_DATA / exp / "1x1" / var / \
+            f"{exp}_{var}_Amon_EC-Earth3_dcppA-hindcast_lead_{lead}_1x1_ensemble_rad.nc"
+        ds = xr.open_dataset(path)
+        print(f"--- {label} lon GREZZO ---")
+        lon_info(ds["lon"], label)
+        fixed = (ds["lon"] % 360).values
+        fixed_sorted = np.sort(fixed)
+        print(f"--- {label} lon DOPO %360+sort ---")
+        lon_info(fixed_sorted, label)
+        lons[label] = (ds["lon"].values, fixed_sorted)
+
+    obs_path = WORK_DIR / f"ERA5_{var}_1x1_{lead_number}year.nc"
+    obs = xr.open_dataset(obs_path)
+    print("--- OBS lon ---")
+    lon_info(obs["lon"], "OBS")
+    obs_lon = obs["lon"].values
+
+    print()
+    print("--- intersezioni (numero di valori lon in comune, tolleranza esatta) ---")
+    for label in ["CTRL", "SENS"]:
+        raw, fixed = lons[label]
+        n_raw = np.intersect1d(raw, obs_lon).size
+        n_fixed = np.intersect1d(fixed, obs_lon).size
+        print(f"  {label}: grezzo vs obs = {n_raw}/{obs_lon.size}   dopo %360+sort vs obs = {n_fixed}/{obs_lon.size}")
+
+
 def debug_snow_pipeline(exp_ctrl, exp_sens, y1, y2, snow_var="snd"):
     """Da eseguire se debug_snow_load NON riproduce l'errore visto in batch
     (successo per lead 1-2 nonostante 'conflicting sizes' in run_one_cover_snow):
