@@ -170,14 +170,23 @@ def _load_snow_ensemble(exp, lead, var="snd"):
     """Media d'ensemble di neve per un lead-year combo (annuale). Stesso pattern
     di file di _load_tas_ensemble/_load_albedo_ensemble. Variabile di default
     'snd' (snow depth); 'sd' dovrebbe essere equivalente, cambiare qui se serve.
-    Per 'snd' la longitudine nei file postprocessati non e' in [0,360] ne'
-    ordinata: stesso fix gia' presente (ma mai eseguito) in
-    05-Serie_temporale_anomalie.ipynb / seasonal_ACC_calculation.ipynb."""
+
+    Trovato con debug_snow_lon: il file 'snd' di CTRL (a1ua) e' su una
+    griglia lon centrata a mezzo grado (-179.5..179.5), diversa da quella a
+    gradi interi (0..359) di SENS e dell'obs ERA5 - le altre variabili di
+    CTRL (tas, alb) non hanno questo problema, sembra specifico del
+    postprocessing di questo file. Rilevato dai valori frazionari (non
+    dall'esperimento, cosi' il fix si applica solo se serve davvero) e
+    corretto riportando la griglia sui gradi interi (errore posizionale
+    max 0.5 gradi, trascurabile per il box 22x22 gradi usato qui)."""
     ds = xr.open_dataset(
         POST_DATA / exp / "1x1" / var /
         f"{exp}_{var}_Amon_EC-Earth3_dcppA-hindcast_lead_{lead}_1x1_ensemble_rad.nc")
     if var == "snd":
-        ds = ds.assign_coords(lon=ds["lon"] % 360).sortby("lon")
+        lon = ds["lon"]
+        if not np.allclose(lon.values % 1, 0, atol=1e-6):
+            lon = lon - 0.5
+        ds = ds.assign_coords(lon=lon % 360).sortby("lon")
     em = ds[var].mean("member")
     em = em.assign_coords(time=pd.to_datetime(em["time"].values).year)
     # visto sul cluster: SENS lead 0-1 ha un timestamp grezzo in piu' che
