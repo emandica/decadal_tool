@@ -60,6 +60,17 @@ def _slope_pvalue(a, b):
     return slope, p
 
 
+def _mask_low_variance(da, pct=10):
+    """Maschera (NaN) i pixel dove la variabilita' temporale di da e' tra le
+    piu' basse (percentile pct, adattivo ai dati). Vedi cover_tas_lib.py
+    (versione annuale) per la motivazione: senza, lo slope della regressione
+    esplode (valori visti >10000) nei pixel dove delta_cover varia pochissimo
+    (aree non vegetate), dividendo per una varianza vicina a zero."""
+    std = da.std("time")
+    threshold = np.nanpercentile(std.values, pct)
+    return da.where(std > threshold)
+
+
 def _load_tas_ensemble_season(exp, lead, season):
     """Media d'ensemble di tas per un lead-year combo, stagionale (file DCPP
     gia' pre-aggregato per stagione, stesso file usato da 04-BIAS_seasons)."""
@@ -190,6 +201,7 @@ def run_one_adapted_season(args):
         cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
         cov_anom_sens = cov_sens - cov_sens.mean("time")
         delta_cover = cov_anom_sens - cov_anom_ctrl
+        delta_cover = _mask_low_variance(delta_cover)  # vedi versione annuale
 
         delta_tas, delta_cover = xr.align(delta_tas, delta_cover, join="inner")
         if delta_tas.sizes.get("time", 0) < 3:

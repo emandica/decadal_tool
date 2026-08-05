@@ -70,6 +70,19 @@ def _slope_pvalue(a, b):
     return slope, p
 
 
+def _mask_low_variance(da, pct=10):
+    """Maschera (NaN) i pixel dove la variabilita' temporale di da e' tra le
+    piu' basse (percentile pct, adattivo ai dati - stesso approccio di
+    _auto_levels, non un valore fisso come lo 0.00005 usato altrove nel
+    progetto per la cover assoluta). Serve a evitare slope instabili: se
+    delta_cover varia pochissimo in un pixel (es. aree non vegetate), lo
+    slope = covarianza/varianza(x) esplode anche per covarianza minima,
+    dividendo per una varianza vicina a zero (valori visti >10000)."""
+    std = da.std("time")
+    threshold = np.nanpercentile(std.values, pct)
+    return da.where(std > threshold)
+
+
 def _load_tas_ensemble(exp, lead):
     """Media d'ensemble di tas per un lead-year combo (annuale), con 'time'
     convertito in anno solare. Stesso file gia' usato da 04-BIAS/06b."""
@@ -285,6 +298,9 @@ def run_one_hybrid(args):
         cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
         cov_anom_sens = cov_sens - cov_sens.mean("time")
         delta_cover = cov_anom_sens - cov_anom_ctrl
+        # maschera i pixel dove delta_cover varia pochissimo (aree non vegetate):
+        # senza, lo slope esplode dividendo per una varianza vicina a zero
+        delta_cover = _mask_low_variance(delta_cover)
 
         delta_skill_tas, delta_cover = xr.align(delta_skill_tas, delta_cover, join="inner")
         if delta_skill_tas.sizes.get("time", 0) < 3:
@@ -319,6 +335,9 @@ def run_one_adapted(args):
         cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
         cov_anom_sens = cov_sens - cov_sens.mean("time")
         delta_cover = cov_anom_sens - cov_anom_ctrl
+        # maschera i pixel dove delta_cover varia pochissimo (aree non vegetate):
+        # senza, lo slope esplode dividendo per una varianza vicina a zero
+        delta_cover = _mask_low_variance(delta_cover)
 
         delta_tas, delta_cover = xr.align(delta_tas, delta_cover, join="inner")
         if delta_tas.sizes.get("time", 0) < 3:
