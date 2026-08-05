@@ -146,6 +146,26 @@ def _era5_obs(era_var, lead_number):
     return obs
 
 
+def _load_albedo_ensemble(exp, lead):
+    """Media d'ensemble di albedo per un lead-year combo (annuale). Stesso
+    pattern di file di _load_tas_ensemble, var='alb' (come 06-covariance_albedo.ipynb)."""
+    ds = xr.open_dataset(
+        POST_DATA / exp / "1x1" / "alb" /
+        f"{exp}_alb_Amon_EC-Earth3_dcppA-hindcast_lead_{lead}_1x1_ensemble_rad.nc")
+    em = ds["alb"].mean("member")
+    em = em.assign_coords(time=pd.to_datetime(em["time"].values).year)
+    return em
+
+
+def _glass_obs(lead_number):
+    """Osservazioni GLASS di albedo, obs indipendente vera (a differenza della
+    cover: qui non serve nessun disegno ibrido, come 06-covariance_albedo.ipynb)."""
+    obs = xr.open_dataset(WORK_DIR / f"GLASS_1x1_{lead_number}year.nc")
+    obs = obs.rename({"bb_albedo": "alb"})["alb"].assign_coords(
+        time=pd.to_datetime(obs["time"].values).year)
+    return obs
+
+
 def _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel, rho=None, p_spearman=None):
     """Come af.lr_plot, ma senza i due difetti che la rendono inadatta alla
     cover (i cui delta sono ~100x piu' piccoli di quelli dell'albedo):
@@ -446,5 +466,56 @@ def run_one_literal(args):
             xlabel=f"delta skill {var} (SENS-CTRL)", ylabel="delta skill tas (SENS-CTRL)",
         )
         return f"{var} {lead} ok ({delta_tas.sizes['time']} anni)"
+    except Exception as e:
+        return f"{var} {lead} ERRORE: {type(e).__name__}: {e}"
+
+
+def run_one_cover_albedo(args):
+    """X = delta_cover (non circolare, come Notebook 1/3). Y = delta_skill_albedo
+    (skill vs GLASS). A differenza della cover, l'albedo ha un'osservazione
+    indipendente vera: qui non serve nessun disegno ibrido, e' un confronto
+    skill-vs-skill pulito (genuino per entrambi SENS e CTRL), come lo schema
+    originale 06/07 applicato direttamente."""
+    exp_ctrl, exp_sens, var, y1, y2, save_path = args
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+    try:
+        # --- Y: delta skill albedo (vs GLASS, genuino per entrambi) ---
+        alb_ctrl = _load_albedo_ensemble(exp_ctrl, lead)
+        alb_sens = _load_albedo_ensemble(exp_sens, lead)
+        obs_alb = _glass_obs(lead_number)
+        alb_ctrl, obs_alb_c = xr.align(alb_ctrl, obs_alb, join="inner")
+        alb_sens, obs_alb_s = xr.align(alb_sens, obs_alb, join="inner")
+
+        anom_ctrl = alb_ctrl - alb_ctrl.mean("time")
+        anom_sens = alb_sens - alb_sens.mean("time")
+        anom_obs_c = obs_alb_c - obs_alb_c.mean("time")
+        anom_obs_s = obs_alb_s - obs_alb_s.mean("time")
+        skill_alb_ctrl = (anom_ctrl * anom_obs_c) / (alb_ctrl.std("time") * obs_alb_c.std("time"))
+        skill_alb_sens = (anom_sens * anom_obs_s) / (alb_sens.std("time") * obs_alb_s.std("time"))
+        skill_alb_ctrl, skill_alb_sens = xr.align(skill_alb_ctrl, skill_alb_sens, join="inner")
+        delta_skill_albedo = skill_alb_sens - skill_alb_ctrl
+
+        # --- X: delta cover (non circolare) ---
+        cov_ctrl = _load_cover(exp_ctrl, var)
+        cov_sens = _load_cover(exp_sens, var)
+        cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+        cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+        cov_anom_sens = cov_sens - cov_sens.mean("time")
+        delta_cover = cov_anom_sens - cov_anom_ctrl
+        delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)
+
+        delta_skill_albedo, delta_cover = xr.align(delta_skill_albedo, delta_cover, join="inner")
+        if delta_skill_albedo.sizes.get("time", 0) < 3:
+            return f"{var} {lead} SALTATO: solo {delta_skill_albedo.sizes.get('time', 0)} anni in comune"
+
+        title = f"cover_albedo_delta_skill_albedo_vs_delta_{var}_{lead}"
+        _map_and_box_regression_hybrid(
+            delta_cover, delta_skill_albedo, title,
+            f"{save_path}/{title}",
+            f"{POST_DATA}/cover_albedo_regression_{var}_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel=f"delta {var} (SENS-CTRL)", ylabel="delta skill albedo (SENS-CTRL, vs GLASS)",
+        )
+        return f"{var} {lead} ok ({delta_skill_albedo.sizes['time']} anni)"
     except Exception as e:
         return f"{var} {lead} ERRORE: {type(e).__name__}: {e}"
