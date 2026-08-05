@@ -70,17 +70,47 @@ def _slope_pvalue(a, b):
     return slope, p
 
 
-def _mask_low_variance(da, pct=10):
-    """Maschera (NaN) i pixel dove la variabilita' temporale di da e' tra le
-    piu' basse (percentile pct, adattivo ai dati - stesso approccio di
-    _auto_levels, non un valore fisso come lo 0.00005 usato altrove nel
-    progetto per la cover assoluta). Serve a evitare slope instabili: se
-    delta_cover varia pochissimo in un pixel (es. aree non vegetate), lo
-    slope = covarianza/varianza(x) esplode anche per covarianza minima,
-    dividendo per una varianza vicina a zero (valori visti >10000)."""
+def _mask_low_variance(da, pct=10, threshold=None):
+    """Maschera (NaN) i pixel dove la variabilita' temporale di da e' troppo
+    bassa. Serve a evitare slope instabili: se delta_cover varia pochissimo in
+    un pixel (es. aree non vegetate), lo slope = covarianza/varianza(x)
+    esplode anche per covarianza minima, dividendo per una varianza vicina a
+    zero (valori visti >10000, anche dopo il taglio al percentile 10 - la
+    maggior parte dei pixel ha evidentemente varianza bassa, non solo la coda).
+
+    threshold: se fornito (valore assoluto di std, scelto guardando la
+    distribuzione reale con debug_cover_variance), ha precedenza sul
+    percentile - vedi quella funzione per scegliere un numero informato
+    invece di indovinare."""
     std = da.std("time")
-    threshold = np.nanpercentile(std.values, pct)
+    if threshold is None:
+        threshold = np.nanpercentile(std.values, pct)
     return da.where(std > threshold)
+
+
+def debug_cover_variance(exp_ctrl, exp_sens, var):
+    """Da eseguire PRIMA del calcolo completo: mostra la distribuzione reale
+    di std(delta_cover) per pixel e quanti pixel verrebbero esclusi a diverse
+    soglie fisse candidate, per scegliere una soglia informata da passare a
+    _mask_low_variance(..., threshold=...) invece di indovinare un numero."""
+    cov_ctrl = _load_cover(exp_ctrl, var)
+    cov_sens = _load_cover(exp_sens, var)
+    cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+    cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+    cov_anom_sens = cov_sens - cov_sens.mean("time")
+    delta_cover = cov_anom_sens - cov_anom_ctrl
+    std = delta_cover.std("time")
+    vals = std.values[np.isfinite(std.values)]
+
+    print(f"--- distribuzione std(delta_{var}) nel tempo, per pixel (n={vals.size}) ---")
+    for p in [1, 5, 10, 25, 50, 75, 90, 95, 99]:
+        print(f"  percentile {p:3d}: {np.percentile(vals, p):.6g}")
+    print(f"  min={vals.min():.6g}  max={vals.max():.6g}  mean={vals.mean():.6g}")
+    print()
+    print("--- pixel esclusi a diverse soglie fisse candidate ---")
+    for thr in [1e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2]:
+        n_excl = int((vals <= thr).sum())
+        print(f"  soglia {thr:.0e}: esclude {n_excl}/{vals.size} pixel ({100 * n_excl / vals.size:.1f}%)")
 
 
 def _load_tas_ensemble(exp, lead):
