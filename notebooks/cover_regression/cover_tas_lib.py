@@ -185,6 +185,23 @@ def _slope_pvalue_full(a, b):
     return slope, p, rho, p_spear
 
 
+def _auto_levels(data, n=10):
+    """Livelli simmetrici attorno a 0 basati sui percentili dei dati (2-98%,
+    robusto agli outlier), non su un valore fisso. Serve per lo slope Pearson:
+    Y=delta_skill_tas (adimensionale) diviso X=delta_cover (frazione, molto
+    piccola) puo' dare slope di ordine di grandezza molto diverso da quello
+    dell'albedo (per cui i livelli fissi [-2,...,2] erano tarati), saturando
+    la colorbar se riusati cosi' com'erano."""
+    finite = data.values[np.isfinite(data.values)]
+    if finite.size == 0:
+        return [-1, -0.5, 0, 0.5, 1]
+    vmax = np.nanpercentile(np.abs(finite), 98)
+    if not np.isfinite(vmax) or vmax == 0:
+        vmax = 1.0
+    edges = np.linspace(0, vmax, n // 2 + 1)[1:]
+    return [-vmax * 1.5] + list(-edges[::-1]) + [0] + list(edges) + [vmax * 1.5]
+
+
 def _map_and_box_regression_hybrid(delta_x, delta_y, title, png_base, nc_out, xlabel, ylabel):
     """Come _map_and_box_regression, ma con DUE mappe (Pearson slope e Spearman
     rho, ciascuna con la propria significativita') e lo scatter con entrambe le
@@ -196,7 +213,7 @@ def _map_and_box_regression_hybrid(delta_x, delta_y, title, png_base, nc_out, xl
         output_core_dims=[[], [], [], []],
     )
 
-    af.map_plot(slope_map, p_map, levels=[-2, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 2],
+    af.map_plot(slope_map, p_map, levels=_auto_levels(slope_map),
                title=f"{title} (Pearson, slope)", cmap="bwr")
     plt.savefig(f"{png_base}_map_pearson.png", dpi=300, bbox_inches="tight")
     plt.close("all")
