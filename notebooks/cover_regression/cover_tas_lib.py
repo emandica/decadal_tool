@@ -192,6 +192,41 @@ def _era5_snow_obs(lead_number, var="snd"):
     return obs
 
 
+def debug_snow_load(exp_ctrl, exp_sens, y1, y2, var="snd"):
+    """Da eseguire PRIMA del batch (stesso principio di debug_cover_variance/
+    debug_years): ispeziona la forma REALE dei file di neve (model ensemble
+    per CTRL/SENS + obs ERA5) senza passare da assign_coords, per capire
+    l'origine di 'duplicate values' / 'conflicting sizes' visti in batch -
+    entrambi sintomi di un 'time' che non e' quello atteso (o non e' un array
+    di lunghezza pari alle altre dimensioni, o contiene piu' timestamp che
+    cadono nello stesso anno solare)."""
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+
+    for label, exp in [("CTRL", exp_ctrl), ("SENS", exp_sens)]:
+        path = POST_DATA / exp / "1x1" / var / \
+            f"{exp}_{var}_Amon_EC-Earth3_dcppA-hindcast_lead_{lead}_1x1_ensemble_rad.nc"
+        ds = xr.open_dataset(path)
+        traw = ds["time"].values
+        print(f"--- {label} {var} {lead} ({path.name}) ---")
+        print(f"  dims: {dict(ds[var].sizes)}")
+        print(f"  time raw (n={traw.size}): {traw[:5]} ... {traw[-3:]}" if traw.size > 8 else f"  time raw: {traw}")
+        years = pd.to_datetime(traw).year
+        print(f"  anni dopo .year (n={years.size}): {sorted(years)}")
+        dup = pd.Series(years).duplicated()
+        if dup.any():
+            print(f"  ATTENZIONE: {dup.sum()} anni duplicati dopo la conversione")
+        print()
+
+    obs_path = WORK_DIR / f"ERA5_{var}_1x1_{lead_number}year.nc"
+    obs = xr.open_dataset(obs_path)
+    traw_obs = obs["time"].values
+    print(f"--- OBS {var} lead_number={lead_number} ({obs_path.name}) ---")
+    print(f"  variabili nel file: {list(obs.data_vars)}")
+    print(f"  dims: {dict(obs[var].sizes) if var in obs.data_vars else 'VARIABILE ASSENTE'}")
+    print(f"  time raw (n={traw_obs.size}): {traw_obs[:5]} ... {traw_obs[-3:]}" if traw_obs.size > 8 else f"  time raw: {traw_obs}")
+
+
 def _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel, rho=None, p_spearman=None):
     """Come af.lr_plot, ma senza i due difetti che la rendono inadatta alla
     cover (i cui delta sono ~100x piu' piccoli di quelli dell'albedo):
