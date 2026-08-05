@@ -180,6 +180,11 @@ def _load_snow_ensemble(exp, lead, var="snd"):
         ds = ds.assign_coords(lon=ds["lon"] % 360).sortby("lon")
     em = ds[var].mean("member")
     em = em.assign_coords(time=pd.to_datetime(em["time"].values).year)
+    # visto sul cluster: SENS lead 0-1 ha un timestamp grezzo in piu' che
+    # collassa sullo stesso anno solare di un altro (2012 duplicato) ->
+    # 'time' con indice non unico, xr.align fallisce con "duplicate values".
+    # Stessa tecnica gia' usata in _load_cover per gestire duplicati.
+    em = em.groupby("time").mean("time")
     return em
 
 
@@ -189,6 +194,8 @@ def _era5_snow_obs(lead_number, var="snd"):
     coincide gia' con 'var' (nessun rename, a differenza di alb/tas)."""
     obs = xr.open_dataset(WORK_DIR / f"ERA5_{var}_1x1_{lead_number}year.nc")
     obs = obs[var].assign_coords(time=pd.to_datetime(obs["time"].values).year)
+    # difensivo, stesso motivo di _load_snow_ensemble
+    obs = obs.groupby("time").mean("time")
     return obs
 
 
@@ -225,6 +232,64 @@ def debug_snow_load(exp_ctrl, exp_sens, y1, y2, var="snd"):
     print(f"  variabili nel file: {list(obs.data_vars)}")
     print(f"  dims: {dict(obs[var].sizes) if var in obs.data_vars else 'VARIABILE ASSENTE'}")
     print(f"  time raw (n={traw_obs.size}): {traw_obs[:5]} ... {traw_obs[-3:]}" if traw_obs.size > 8 else f"  time raw: {traw_obs}")
+
+
+def debug_snow_pipeline(exp_ctrl, exp_sens, y1, y2, snow_var="snd"):
+    """Da eseguire se debug_snow_load NON riproduce l'errore visto in batch
+    (successo per lead 1-2 nonostante 'conflicting sizes' in run_one_cover_snow):
+    ripete la stessa sequenza di run_one_cover_snow passo-passo, stampando la
+    shape/anni di ogni oggetto intermedio, per individuare ESATTAMENTE quale
+    xr.align/operazione fallisce quando i file grezzi risultano puliti."""
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+
+    def shape(da, label):
+        t = da["time"].values if "time" in da.coords else None
+        print(f"  {label}: dims={dict(da.sizes)}  anni={sorted(t) if t is not None else 'n/d'}")
+
+    print(f"=== debug_snow_pipeline {lead} (snow_var={snow_var}) ===")
+
+    snow_ctrl = _load_snow_ensemble(exp_ctrl, lead, snow_var)
+    shape(snow_ctrl, "snow_ctrl (dopo _load_snow_ensemble)")
+    snow_sens = _load_snow_ensemble(exp_sens, lead, snow_var)
+    shape(snow_sens, "snow_sens (dopo _load_snow_ensemble)")
+    obs_snow = _era5_snow_obs(lead_number, snow_var)
+    shape(obs_snow, "obs_snow (dopo _era5_snow_obs)")
+
+    snow_ctrl, obs_snow_c = xr.align(snow_ctrl, obs_snow, join="inner")
+    shape(snow_ctrl, "snow_ctrl (dopo align con obs)")
+    shape(obs_snow_c, "obs_snow_c (dopo align con ctrl)")
+    snow_sens, obs_snow_s = xr.align(snow_sens, obs_snow, join="inner")
+    shape(snow_sens, "snow_sens (dopo align con obs)")
+    shape(obs_snow_s, "obs_snow_s (dopo align con sens)")
+
+    anom_ctrl = snow_ctrl - snow_ctrl.mean("time")
+    anom_sens = snow_sens - snow_sens.mean("time")
+    anom_obs_c = obs_snow_c - obs_snow_c.mean("time")
+    anom_obs_s = obs_snow_s - obs_snow_s.mean("time")
+    skill_snow_ctrl = (anom_ctrl * anom_obs_c) / (snow_ctrl.std("time") * obs_snow_c.std("time"))
+    skill_snow_sens = (anom_sens * anom_obs_s) / (snow_sens.std("time") * obs_snow_s.std("time"))
+    shape(skill_snow_ctrl, "skill_snow_ctrl (prima dell'align finale)")
+    shape(skill_snow_sens, "skill_snow_sens (prima dell'align finale)")
+
+    skill_snow_ctrl, skill_snow_sens = xr.align(skill_snow_ctrl, skill_snow_sens, join="inner")
+    delta_skill_snow = skill_snow_sens - skill_snow_ctrl
+    shape(delta_skill_snow, "delta_skill_snow (finale)")
+
+    cov_ctrl = _load_cover(exp_ctrl, "cvh")
+    shape(cov_ctrl, "cov_ctrl (dopo _load_cover)")
+    cov_sens = _load_cover(exp_sens, "cvh")
+    shape(cov_sens, "cov_sens (dopo _load_cover)")
+    cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+    cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+    cov_anom_sens = cov_sens - cov_sens.mean("time")
+    delta_cover = cov_anom_sens - cov_anom_ctrl
+    delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)
+    shape(delta_cover, "delta_cover (mascherato)")
+
+    delta_skill_snow, delta_cover = xr.align(delta_skill_snow, delta_cover, join="inner")
+    shape(delta_skill_snow, "delta_skill_snow (dopo align finale con cover)")
+    print("=== fine, nessun errore ===")
 
 
 def _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel, rho=None, p_spearman=None):
