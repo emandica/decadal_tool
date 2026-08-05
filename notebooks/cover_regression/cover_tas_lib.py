@@ -330,7 +330,7 @@ def run_one_hybrid(args):
         delta_cover = cov_anom_sens - cov_anom_ctrl
         # maschera i pixel dove delta_cover varia pochissimo (aree non vegetate):
         # senza, lo slope esplode dividendo per una varianza vicina a zero
-        delta_cover = _mask_low_variance(delta_cover)
+        delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)
 
         delta_skill_tas, delta_cover = xr.align(delta_skill_tas, delta_cover, join="inner")
         if delta_skill_tas.sizes.get("time", 0) < 3:
@@ -367,7 +367,7 @@ def run_one_adapted(args):
         delta_cover = cov_anom_sens - cov_anom_ctrl
         # maschera i pixel dove delta_cover varia pochissimo (aree non vegetate):
         # senza, lo slope esplode dividendo per una varianza vicina a zero
-        delta_cover = _mask_low_variance(delta_cover)
+        delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)
 
         delta_tas, delta_cover = xr.align(delta_tas, delta_cover, join="inner")
         if delta_tas.sizes.get("time", 0) < 3:

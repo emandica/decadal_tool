@@ -60,14 +60,18 @@ def _slope_pvalue(a, b):
     return slope, p
 
 
-def _mask_low_variance(da, pct=10):
-    """Maschera (NaN) i pixel dove la variabilita' temporale di da e' tra le
-    piu' basse (percentile pct, adattivo ai dati). Vedi cover_tas_lib.py
-    (versione annuale) per la motivazione: senza, lo slope della regressione
-    esplode (valori visti >10000) nei pixel dove delta_cover varia pochissimo
-    (aree non vegetate), dividendo per una varianza vicina a zero."""
+def _mask_low_variance(da, pct=10, threshold=None):
+    """Maschera (NaN) i pixel dove la variabilita' temporale di da e' troppo
+    bassa. Vedi cover_tas_lib.py (versione annuale) per la motivazione e per
+    debug_cover_variance (diagnostica usata per scegliere threshold=1e-3,
+    confermato sui dati reali: il 75* percentile di std(delta_cover) e'
+    ~zero - aree non vegetate - con un salto di ~4 ordini di grandezza prima
+    del segnale vero al 90* percentile).
+
+    threshold: se fornito, ha precedenza sul percentile."""
     std = da.std("time")
-    threshold = np.nanpercentile(std.values, pct)
+    if threshold is None:
+        threshold = np.nanpercentile(std.values, pct)
     return da.where(std > threshold)
 
 
@@ -201,7 +205,7 @@ def run_one_adapted_season(args):
         cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
         cov_anom_sens = cov_sens - cov_sens.mean("time")
         delta_cover = cov_anom_sens - cov_anom_ctrl
-        delta_cover = _mask_low_variance(delta_cover)  # vedi versione annuale
+        delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)  # vedi versione annuale
 
         delta_tas, delta_cover = xr.align(delta_tas, delta_cover, join="inner")
         if delta_tas.sizes.get("time", 0) < 3:
