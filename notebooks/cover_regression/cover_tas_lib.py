@@ -103,17 +103,23 @@ def _era5_obs(era_var, lead_number):
     return obs
 
 
-def _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel):
+def _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel, rho=None, p_spearman=None):
     """Come af.lr_plot, ma senza i due difetti che la rendono inadatta alla
     cover (i cui delta sono ~100x piu' piccoli di quelli dell'albedo):
     (1) limiti degli assi FISSI a [-1,2] (qui: automatici, con margine);
     (2) etichette 'time' convertite in anno (int) passate a pd.to_datetime,
     che le interpreta come nanosecondi dall'epoca Unix -> tutte '1970'
-    (qui: l'anno e' gia' un intero, si annota direttamente)."""
+    (qui: l'anno e' gia' un intero, si annota direttamente).
+
+    Se rho/p_spearman sono forniti, li aggiunge in legenda accanto a
+    slope/r/p (Pearson): la relazione potrebbe essere monotona ma non
+    lineare, e Spearman lo cattura mentre linregress no."""
     fig, ax = plt.subplots(figsize=[10, 8])
     ax.scatter(box_x, box_y, label="Dati", c="blue", alpha=0.7)
-    ax.plot(box_x, y_pred, color="red", linewidth=2,
-            label=f"Retta di regressione (p={p:.2f}, r={r:.2f})")
+    label = f"Pearson: p={p:.2f}, r={r:.2f}"
+    if rho is not None:
+        label += f"\nSpearman: rho={rho:.2f}, p={p_spearman:.2f}"
+    ax.plot(box_x, y_pred, color="red", linewidth=2, label=label)
 
     if hasattr(box_x, "time"):
         for xi, yi, year in zip(box_x.values, box_y.values, box_x["time"].values):
@@ -164,6 +170,119 @@ def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_ou
         "r": xr.DataArray(r), "p": xr.DataArray(p), "std_err": xr.DataArray(std_err),
         "y_pred": xr.DataArray(y_pred, dims=["time"], coords={"time": box_x.time}),
     }).to_netcdf(nc_out)
+
+
+def _slope_pvalue_full(a, b):
+    """Come _slope_pvalue, ma calcola ANCHE la correlazione di rango di
+    Spearman accanto alla regressione lineare di Pearson: la relazione tra
+    delta_cover e delta_skill_tas potrebbe essere monotona ma non lineare,
+    e Spearman la cattura mentre scipy.stats.linregress no."""
+    mask = ~np.isnan(a) & ~np.isnan(b)
+    if np.sum(mask) < 3 or np.all(a[mask] == a[mask][0]):
+        return np.nan, np.nan, np.nan, np.nan
+    slope, intercept, r, p, std_err = stats.linregress(a[mask], b[mask])
+    rho, p_spear = stats.spearmanr(a[mask], b[mask])
+    return slope, p, rho, p_spear
+
+
+def _map_and_box_regression_hybrid(delta_x, delta_y, title, png_base, nc_out, xlabel, ylabel):
+    """Come _map_and_box_regression, ma con DUE mappe (Pearson slope e Spearman
+    rho, ciascuna con la propria significativita') e lo scatter con entrambe le
+    statistiche in legenda. Usata solo da run_one_hybrid (notebook 03)."""
+    slope_map, p_map, rho_map, p_spear_map = xr.apply_ufunc(
+        _slope_pvalue_full, delta_x, delta_y,
+        input_core_dims=[["time"], ["time"]],
+        vectorize=True, output_dtypes=[float, float, float, float],
+        output_core_dims=[[], [], [], []],
+    )
+
+    af.map_plot(slope_map, p_map, levels=[-2, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 2],
+               title=f"{title} (Pearson, slope)", cmap="bwr")
+    plt.savefig(f"{png_base}_map_pearson.png", dpi=300, bbox_inches="tight")
+    plt.close("all")
+
+    af.map_plot(rho_map, p_spear_map, levels=[-1, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 1],
+               title=f"{title} (Spearman, rho)", cmap="PuOr")
+    plt.savefig(f"{png_base}_map_spearman.png", dpi=300, bbox_inches="tight")
+    plt.close("all")
+
+    box_x = af.domain_selection(delta_x, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX)
+    box_y = af.domain_selection(delta_y, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX)
+    box_x, box_y = xr.align(box_x, box_y, join="inner")
+    slope, intercept, r, p, std_err = stats.linregress(box_x.values, box_y.values)
+    rho, p_spear = stats.spearmanr(box_x.values, box_y.values)
+    y_pred = slope * box_x.values + intercept
+
+    _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel, rho=rho, p_spearman=p_spear)
+    plt.savefig(f"{png_base}_scatter.png", dpi=300, bbox_inches="tight")
+    plt.close("all")
+
+    xr.Dataset({
+        "delta_x": box_x, "delta_y": box_y,
+        "slope": xr.DataArray(slope), "intercept": xr.DataArray(intercept),
+        "r": xr.DataArray(r), "p": xr.DataArray(p), "std_err": xr.DataArray(std_err),
+        "rho_spearman": xr.DataArray(rho), "p_spearman": xr.DataArray(p_spear),
+        "y_pred": xr.DataArray(y_pred, dims=["time"], coords={"time": box_x.time}),
+    }).to_netcdf(nc_out)
+
+
+def run_one_hybrid(args):
+    """Notebook 3 (disegno ibrido): prende il pezzo valido di ciascun metodo.
+
+    X = delta_cover (come Notebook 1/adattato: cover_SENS - cover_CTRL). Non
+    circolare: SENS e' forzato con le osservazioni, quindi delta_cover misura
+    genuinamente l'entita' della correzione rispetto al modello di vegetazione
+    dinamico di CTRL.
+
+    Y = delta_skill_tas (come Notebook 2/letterale, ma SOLO il lato tas, dove
+    ERA5 e' un riferimento osservativo vero e indipendente). E' un genuino
+    miglioramento di skill (non solo una differenza di anomalie come nel
+    Notebook 1), e non soffre della circolarita' che affligge lo skill della
+    cover nel Notebook 2 (qui la cover non viene mai confrontata con "se
+    stessa": si usa solo la sua differenza SENS-CTRL).
+    """
+    exp_ctrl, exp_sens, var, era_var, y1, y2, save_path = args
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+    try:
+        # --- Y: delta skill tas (vs ERA5, genuino miglioramento di skill) ---
+        tas_ctrl = _load_tas_ensemble(exp_ctrl, lead)
+        tas_sens = _load_tas_ensemble(exp_sens, lead)
+        obs_tas = _era5_obs(era_var, lead_number)
+        tas_ctrl, obs_tas_c = xr.align(tas_ctrl, obs_tas, join="inner")
+        tas_sens, obs_tas_s = xr.align(tas_sens, obs_tas, join="inner")
+
+        anom_ctrl = tas_ctrl - tas_ctrl.mean("time")
+        anom_sens = tas_sens - tas_sens.mean("time")
+        anom_obs_c = obs_tas_c - obs_tas_c.mean("time")
+        anom_obs_s = obs_tas_s - obs_tas_s.mean("time")
+        skill_tas_ctrl = (anom_ctrl * anom_obs_c) / (tas_ctrl.std("time") * obs_tas_c.std("time"))
+        skill_tas_sens = (anom_sens * anom_obs_s) / (tas_sens.std("time") * obs_tas_s.std("time"))
+        skill_tas_ctrl, skill_tas_sens = xr.align(skill_tas_ctrl, skill_tas_sens, join="inner")
+        delta_skill_tas = skill_tas_sens - skill_tas_ctrl
+
+        # --- X: delta cover (non circolare, come Notebook 1) ---
+        cov_ctrl = _load_cover(exp_ctrl, var)
+        cov_sens = _load_cover(exp_sens, var)
+        cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+        cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+        cov_anom_sens = cov_sens - cov_sens.mean("time")
+        delta_cover = cov_anom_sens - cov_anom_ctrl
+
+        delta_skill_tas, delta_cover = xr.align(delta_skill_tas, delta_cover, join="inner")
+        if delta_skill_tas.sizes.get("time", 0) < 3:
+            return f"{var} {lead} SALTATO: solo {delta_skill_tas.sizes.get('time', 0)} anni in comune"
+
+        title = f"hybrid_delta_skill_tas_vs_delta_{var}_{lead}"
+        _map_and_box_regression_hybrid(
+            delta_cover, delta_skill_tas, title,
+            f"{save_path}/{title}",
+            f"{POST_DATA}/hybrid_regression_{var}_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel=f"delta {var} (SENS-CTRL)", ylabel="delta skill tas (SENS-CTRL, vs ERA5)",
+        )
+        return f"{var} {lead} ok ({delta_skill_tas.sizes['time']} anni)"
+    except Exception as e:
+        return f"{var} {lead} ERRORE: {type(e).__name__}: {e}"
 
 
 def run_one_adapted(args):
