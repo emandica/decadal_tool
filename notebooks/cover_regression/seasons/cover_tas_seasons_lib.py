@@ -166,7 +166,7 @@ def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_ou
         vectorize=True, output_dtypes=[float, float], output_core_dims=[[], []],
     )
     af.map_plot(slope_map, p_map, levels=[-2, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 2],
-               title=title, cmap="bwr")
+               title=title, cmap="bwr", sign=0.90)
     plt.savefig(png_map, dpi=300, bbox_inches="tight")
     plt.close("all")
 

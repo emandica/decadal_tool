@@ -400,7 +400,7 @@ def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_ou
         vectorize=True, output_dtypes=[float, float], output_core_dims=[[], []],
     )
     af.map_plot(slope_map, p_map, levels=[-2, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 2],
-               title=title, cmap="bwr")
+               title=title, cmap="bwr", sign=0.90)
     plt.savefig(png_map, dpi=300, bbox_inches="tight")
     plt.close("all")
 
@@ -472,17 +472,17 @@ def _map_and_box_regression_hybrid(delta_x, delta_y, title, png_base, nc_out, xl
     )
 
     af.map_plot(slope_map, p_map, levels=_auto_levels(slope_map),
-               title=f"{title} (Pearson, slope)", cmap="bwr")
+               title=f"{title} (Pearson, slope)", cmap="bwr", sign=0.90)
     plt.savefig(f"{png_base}_map_pearson.png", dpi=300, bbox_inches="tight")
     plt.close("all")
 
     af.map_plot(r_map, p_map, levels=[-1, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 1],
-               title=f"{title} (Pearson, r)", cmap="PuOr")
+               title=f"{title} (Pearson, r)", cmap="PuOr", sign=0.90)
     plt.savefig(f"{png_base}_map_pearson_r.png", dpi=300, bbox_inches="tight")
     plt.close("all")
 
     af.map_plot(rho_map, p_spear_map, levels=[-1, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 1],
-               title=f"{title} (Spearman, rho)", cmap="PuOr")
+               title=f"{title} (Spearman, rho)", cmap="PuOr", sign=0.90)
     plt.savefig(f"{png_base}_map_spearman.png", dpi=300, bbox_inches="tight")
     plt.close("all")
 
