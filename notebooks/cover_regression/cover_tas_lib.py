@@ -399,7 +399,7 @@ def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_ou
         input_core_dims=[["time"], ["time"]],
         vectorize=True, output_dtypes=[float, float], output_core_dims=[[], []],
     )
-    af.map_plot(slope_map, p_map, levels=[-2, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 2],
+    af.map_plot(slope_map, p_map, levels=_auto_levels(slope_map),
                title=title, cmap="bwr", sign=0.90)
     plt.savefig(png_map, dpi=300, bbox_inches="tight")
     plt.close("all")

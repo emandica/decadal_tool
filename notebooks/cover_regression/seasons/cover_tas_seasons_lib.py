@@ -158,6 +158,23 @@ def _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel):
     plt.tight_layout()
 
 
+def _auto_levels(data, n=10):
+    """Livelli simmetrici attorno a 0 basati sui percentili dei dati (2-98%,
+    robusto agli outlier), non su un valore fisso - stessa funzione di
+    cover_tas_lib.py (modulo annuale), copiata qui perche' questo modulo
+    stagionale e' autonomo (non importa dall'altro). Evita la saturazione
+    della colorbar gia' vista con i livelli fissi [-2,...,2] (tarati per la
+    scala albedo-tas, non cover-tas)."""
+    finite = data.values[np.isfinite(data.values)]
+    if finite.size == 0:
+        return [-1, -0.5, 0, 0.5, 1]
+    vmax = np.nanpercentile(np.abs(finite), 98)
+    if not np.isfinite(vmax) or vmax == 0:
+        vmax = 1.0
+    edges = np.linspace(0, vmax, n // 2 + 1)[1:]
+    return [-vmax * 1.5] + list(-edges[::-1]) + [0] + list(edges) + [vmax * 1.5]
+
+
 def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_out,
                             xlabel="delta cover", ylabel="delta tas"):
     slope_map, p_map = xr.apply_ufunc(
@@ -165,7 +182,7 @@ def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_ou
         input_core_dims=[["time"], ["time"]],
         vectorize=True, output_dtypes=[float, float], output_core_dims=[[], []],
     )
-    af.map_plot(slope_map, p_map, levels=[-2, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 2],
+    af.map_plot(slope_map, p_map, levels=_auto_levels(slope_map),
                title=title, cmap="bwr", sign=0.90)
     plt.savefig(png_map, dpi=300, bbox_inches="tight")
     plt.close("all")
