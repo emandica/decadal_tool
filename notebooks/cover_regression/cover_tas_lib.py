@@ -125,8 +125,17 @@ def _load_tas_ensemble(exp, lead):
 
 
 def _load_cover(exp, var):
-    """Serie temporale continua di vegetation cover (cvh o cvl), 'time' in anno
-    solare. Nomi file identici a quelli gia' usati in Fig1/Fig2 (final_figure)."""
+    """Serie temporale continua di vegetation cover, 'time' in anno solare.
+    var='cvh'/'cvl': nomi file identici a quelli gia' usati in Fig1/Fig2
+    (final_figure). var='cvt': cover totale, somma di cvh e cvl (non esiste
+    un file dedicato, si costruisce sommando le due componenti gia' allineate
+    sugli stessi anni)."""
+    if var == "cvt":
+        cvh = _load_cover(exp, "cvh")
+        cvl = _load_cover(exp, "cvl")
+        cvh, cvl = xr.align(cvh, cvl, join="inner")
+        return cvh + cvl
+
     if exp == "a1ua":
         fname = f"{exp}_effective_{var}_1x1.nc"
     else:
