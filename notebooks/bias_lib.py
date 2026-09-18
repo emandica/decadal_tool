@@ -30,9 +30,13 @@ import pandas as pd
 import xarray as xr
 import xskillscore as xs
 import dask
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 from scipy import stats
 
-from config import POST_DATA, WORK_DIR
+from config import POST_DATA, WORK_DIR, FIG_DIR
+import albedo_functions as af
 
 
 def bootstrap_quantile_bias(sens, ctrl, ref, iterations=1000):
@@ -123,3 +127,43 @@ def run_one(args):
     """Adattatore per Pool.imap_unordered: un solo argomento (tupla)."""
     exp_ctrl, exp_sens, var, era_var, y1, y2, save_path = args
     return process_lead_years(exp_ctrl, exp_sens, var, era_var, y1, y2, save_path)
+
+
+def plot_lead_years_bias(args):
+    """Figure di bias per una combinazione di lead-year (04-Fig4_BIAS_plot),
+    a partire dai file .nc salvati da process_lead_years/run_one. Corregge
+    due bug dell'originale (era ProcessPoolExecutor + funzione nel notebook):
+
+    1. I p-value salvati da process_lead_years hanno nome variabile 'p' (vedi
+       xr.DataArray(..., name="p") sopra), non var/'tas': passare l'intero
+       Dataset a af.map_plot falliva dentro significance_mask ("cannot
+       directly convert an xarray.Dataset into a numpy array") - va
+       indicizzato esplicitamente con ["p"].
+    2. Il nome del PNG salvato nell'originale non includeva la combinazione
+       di lead-year (era sempre '{exp}_{var}_bias.png'): con 10 combinazioni
+       elaborate in parallelo, ogni chiamata sovrascriveva lo stesso file -
+       restava visibile solo l'ultima completata (ordine non deterministico
+       coi processi paralleli), le altre 9 andavano perse silenziosamente.
+       Qui il nome include '{lead}'.
+    """
+    exp_ctrl, exp_sens, var, y1, y2, save_path = args
+    lead = f"{y1}-{y2}"
+    try:
+        dset_ctrl = xr.open_dataset(f"{save_path}/{exp_ctrl}_{var}_lead_{lead}_bias.nc")
+        dset_sens = xr.open_dataset(f"{save_path}/{exp_sens}_{var}_lead_{lead}_bias.nc")
+        dset_ctrl_p = xr.open_dataset(f"{save_path}/{exp_ctrl}_{var}_lead_{lead}_bias_p.nc")
+        dset_sens_p = xr.open_dataset(f"{save_path}/{exp_sens}_{var}_lead_{lead}_bias_p.nc")
+
+        levels = [-0.5, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.5]
+
+        af.map_plot(dset_ctrl[var], dset_ctrl_p["p"], levels=levels, title="a) DCPP-CTRL", cmap="BrBG", antartica=False)
+        plt.savefig(f"{FIG_DIR}/{exp_ctrl}_{var}_lead_{lead}_bias.png", dpi=600, bbox_inches="tight")
+        plt.close("all")
+
+        af.map_plot(dset_sens[var], dset_sens_p["p"], levels=levels, title="b) DCPP-SENS", cmap="BrBG", antartica=False)
+        plt.savefig(f"{FIG_DIR}/{exp_sens}_{var}_lead_{lead}_bias.png", dpi=600, bbox_inches="tight")
+        plt.close("all")
+
+        return f"{lead} ok"
+    except Exception as e:
+        return f"{lead} ERRORE: {type(e).__name__}: {e}"
