@@ -19,6 +19,7 @@ CONFESS_DATA = DATA_ROOT / "00-dataset" / "02-confess" / "01-confess_data"   # d
 BC_DATA      = DATA_ROOT / "00-dataset" / "02-confess" / "03-bc"             # boundary conditions (land/sea)
 ERA5_ROOT    = DATA_ROOT / "00-dataset" / "01-reanalysis" / "01-era5"        # rianalisi ERA5
 POST_DATA    = DATA_ROOT / "02-confess" / "05-confess-post-data"             # dati post-processati
+LSM_FILE     = DATA_ROOT / "00-dataset" / "lsm_nemo_ifs_r1x1.nc"            # maschera terra-mare (af.land_seas_mask)
 
 # --- Dati calcolati e output ---
 WORK_DIR     = DATA_ROOT / "cartella_ordinata"        # .nc intermedi prodotti dai notebook di calcolo

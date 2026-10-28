@@ -15,7 +15,9 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 
 import logging
 
-def global_average(dset):     
+from config import LSM_FILE
+
+def global_average(dset):
     lat_dim = 'lat' if 'lat' in dset.dims else 'latitude'
     lon_dim = 'lon' if 'lon' in dset.dims else 'longitude'
     
@@ -245,7 +247,7 @@ def land_seas_mask(dset, tipo = 'land'):
     "lat": dset.lat.assign_attrs({"standard_name": "latitude", "units": "degrees_north", "axis": "Y"})
 })
     # Load the land-sea mask dataset
-    lsm = xr.open_dataset('/confess/dicarlo/00-dataset/lsm_nemo_ifs_r1x1.nc')
+    lsm = xr.open_dataset(LSM_FILE)
 
     # Adjust longitudes to the range [-180, 180]
     #lsm['lon'] = (lsm['lon'] + 180) % 360 - 180
