@@ -53,7 +53,7 @@ def bootstrap_quantile_bias(sens, ctrl, ref, iterations=1000):
     return sig_delta
 
 
-def process_lead_years(exp_ctrl, exp_sens, var, era_var, y1, y2, save_path):
+def process_lead_years(exp_ctrl, exp_sens, var, era_var, y1, y2, save_path, bootstrap="block"):
     """Identica alla funzione originale nel notebook (era la cella 4), stessa
     logica bit-per-bit. Unico cambiamento strutturale: 'DATA_PATH'/'OBS_PATH'/
     'era_var' erano variabili GLOBALI del notebook (invisibili a un processo
@@ -72,7 +72,12 @@ def process_lead_years(exp_ctrl, exp_sens, var, era_var, y1, y2, save_path):
     dset_ctrl_1999/dset_sens_1999/obs_1999 venivano calcolati (slice dal
     1999) ma MAI USATI - bias e bootstrap sotto operano sulla serie temporale
     COMPLETA. Se non era intenzionale andrebbe deciso a parte; qui il
-    comportamento e' preservato identico all'originale."""
+    comportamento e' preservato identico all'originale.
+
+    bootstrap: metodo per i quantili della differenza di bias SENS - CTRL.
+    'block' (default) = af.block_bootstrap_quantile_bias, Goddard 2013 /
+    Smith 2019, sugli stessi anni delle mappe di bias; 'pooled' = la
+    bootstrap_quantile_bias originale qui sopra. Stesso formato di uscita."""
     lead = f"{y1}-{y2}"
     lead_number = y2 - y1 + 1
     try:
@@ -104,7 +109,10 @@ def process_lead_years(exp_ctrl, exp_sens, var, era_var, y1, y2, save_path):
         ctrl_p_value = xr.DataArray(data=ctrl_p_value, coords=bias_ctrl.coords, dims=["lat", "lon"], name="p")
         sens_p_value = xr.DataArray(data=sens_p_value, coords=bias_sens.coords, dims=["lat", "lon"], name="p")
 
-        delta = bootstrap_quantile_bias(dset_ctrl, dset_sens, obs.mean("time"))
+        if bootstrap == "block":
+            delta = af.block_bootstrap_quantile_bias(dset_sens[var], dset_ctrl[var], obs[var])
+        else:
+            delta = bootstrap_quantile_bias(dset_ctrl, dset_sens, obs.mean("time"))
 
         ctrl_outfile = f"{save_path}/{exp_ctrl}_{var}_lead_{lead}_bias.nc"
         sens_outfile = f"{save_path}/{exp_sens}_{var}_lead_{lead}_bias.nc"
@@ -124,9 +132,10 @@ def process_lead_years(exp_ctrl, exp_sens, var, era_var, y1, y2, save_path):
 
 
 def run_one(args):
-    """Adattatore per Pool.imap_unordered: un solo argomento (tupla)."""
-    exp_ctrl, exp_sens, var, era_var, y1, y2, save_path = args
-    return process_lead_years(exp_ctrl, exp_sens, var, era_var, y1, y2, save_path)
+    """Adattatore per Pool.imap_unordered: un solo argomento (tupla); l'ottavo
+    elemento (metodo di bootstrap) e' facoltativo, default 'block'."""
+    exp_ctrl, exp_sens, var, era_var, y1, y2, save_path, *rest = args
+    return process_lead_years(exp_ctrl, exp_sens, var, era_var, y1, y2, save_path, *rest)
 
 
 def plot_lead_years_bias(args):
