@@ -340,6 +340,269 @@ def bootstrap_acc_significance(sens_anom, ctrl_anom, ref_anom, iterations=1000, 
     return float((obs < lo) or (obs > hi))
 
 ##################################################################################
+# Bootstrap a blocchi di Goddard et al. (2013), nella ricetta esplicita di
+# Smith et al. (2019, Methods), per la differenza SENS - CTRL.
+#
+# Alternativa alle funzioni bootstrap_* qui sopra, che restano invariate e
+# usabili. Il vecchio ricampionamento a pool (membri SENS+CTRL mescolati, anni
+# fissi) su dati sintetici senza vera differenza dava il 12-20% di falsi
+# positivi invece del 5%; quello a blocchi e' lo standard in letteratura per
+# confrontare due sistemi di hindcast ed e' leggermente conservativo (1-2,5%
+# di falsi positivi a p<0.05 con 15-21 anni: ricampionando anni e membri il
+# rumore dei membri entra due volte).
+#
+# Le funzioni block_* hanno lo stesso formato di uscita delle vecchie
+# corrispondenti, cosi' i file salvati e i notebook che li leggono non cambiano:
+#   bootstrap_quantile_correlation -> block_bootstrap_quantile_correlation
+#   bootstrap_acc_significance     -> block_bootstrap_acc_significance
+#   bootstrap_quantile_bias        -> block_bootstrap_quantile_bias
+# Per un p-value continuo (es. per l'FDR): block_bootstrap_delta_pvalue, con
+# pooled_bootstrap_delta_pvalue come alternativa col vecchio ricampionamento.
+##################################################################################
+_QS_CORR = [0.005, 0.025, 0.05, 0.10, 0.90, 0.95, 0.975, 0.995]
+_QS_BIAS = [0.025, 0.05, 0.10, 0.90, 0.95, 0.975]
+
+
+def _match_grid(other, template, space):
+    """Riporta `other` sulla griglia di `template` (stessi punti a meno di
+    arrotondamenti, anche se in ordine diverso); errore esplicito se le
+    griglie sono davvero diverse."""
+    for d in space:
+        if d in other.indexes and d in template.indexes:
+            try:
+                other = other.sel({d: template[d].values}, method='nearest', tolerance=1e-3)
+            except KeyError:
+                raise ValueError(f"griglie diverse lungo '{d}' tra SENS, CTRL e osservazione")
+            other = other.assign_coords({d: template[d].values})
+        elif other.sizes[d] != template.sizes[d]:
+            raise ValueError(f"dimensione '{d}' diversa tra SENS, CTRL e osservazione")
+    return other
+
+
+def _block_bootstrap_delta(sens, ctrl, ref=None, statistic='acc', method='block',
+                           n_iter=1000, block=5, seed=0, keep_samples=False):
+    """Motore comune delle funzioni block_* e pooled_bootstrap_delta_pvalue.
+
+    Differenza SENS - CTRL di una statistica della media d'ensemble:
+      statistic='acc'  correlazione con ref lungo il tempo;
+      statistic='bias' media nel tempo (l'osservazione si elide nella
+                       differenza: ref, se ha 'time', serve solo ad
+                       allineare gli anni, come nelle mappe di bias).
+
+    method='block' (Goddard 2013 / Smith 2019), per ogni iterazione:
+      1. si ricampionano con reinserimento i T anni a blocchi di `block` anni
+         consecutivi (moving block, per l'autocorrelazione), gli stessi per
+         SENS, CTRL e osservazione (confronto appaiato);
+      2. per ciascun anno ricampionato si ricampionano con reinserimento gli
+         E membri, separatamente per SENS e per CTRL;
+      3. si calcola la differenza della statistica.
+      Test bilaterale "differenza = 0": p = 2 * min(frazione <= 0, frazione >= 0).
+    method='pooled' (vecchio schema di bootstrap_quantile_correlation): anni
+      fissi, due ensemble da E_sens+E_ctrl membri pescati dal pool SENS+CTRL;
+      p = 2 * min(frazione <= delta osservato, frazione >= delta osservato).
+
+    sens, ctrl: DataArray (member, time, ...); ref: DataArray (time, ...).
+    Ritorna (d_obs, p, samples, template, space): d_obs e p appiattiti sulle
+    dimensioni spaziali `space` (lunghezza 1 se non ce ne sono), samples
+    (n_iter, punti) float32 solo se keep_samples, template = sens allineato.
+    Le n_iter iterazioni non restano in memoria se non servono i quantili."""
+    if statistic not in ('acc', 'bias'):
+        raise ValueError(f"statistic deve essere 'acc' o 'bias', non {statistic!r}")
+    if method not in ('block', 'pooled'):
+        raise ValueError(f"method deve essere 'block' o 'pooled', non {method!r}")
+    if ref is not None and 'time' not in ref.dims:
+        if statistic == 'acc':
+            raise ValueError("per l'ACC ref deve avere la dimensione 'time'")
+        ref = None  # es. obs.mean('time') del vecchio bias: non serve
+    if statistic == 'acc' and ref is None:
+        raise ValueError("per l'ACC serve ref (osservazione)")
+
+    space = [d for d in sens.dims if d not in ('member', 'time')]
+    objs = [sens, ctrl] + ([ref] if ref is not None else [])
+    objs = list(xr.align(*objs, join='inner', exclude=['member'] + space))
+    sens = objs[0]
+    objs = [sens] + [_match_grid(o, sens, space) for o in objs[1:]]
+    ctrl = objs[1]
+    ref = objs[2] if len(objs) == 3 else None
+    n_t = sens.sizes['time']
+    if n_t < 3:
+        raise ValueError(f"solo {n_t} tempi in comune tra SENS, CTRL e osservazione")
+
+    S = np.asarray(sens.transpose('member', 'time', *space).values, dtype=np.float64).reshape(sens.sizes['member'], n_t, -1)
+    C = np.asarray(ctrl.transpose('member', 'time', *space).values, dtype=np.float64).reshape(ctrl.sizes['member'], n_t, -1)
+    O = (np.asarray(ref.transpose('time', *space).values, dtype=np.float64).reshape(n_t, -1)
+         if statistic == 'acc' else None)
+
+    def stat(em, obs):
+        if statistic == 'bias':
+            return em.mean(0)
+        a = em - em.mean(0)
+        o = obs - obs.mean(0)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            return (a * o).sum(0) / np.sqrt((a ** 2).sum(0) * (o ** 2).sum(0))
+
+    d_obs = stat(S.mean(0), O) - stat(C.mean(0), O)
+    thr = 0.0 if method == 'block' else d_obs
+
+    rng = np.random.default_rng(seed)
+    if method == 'block':
+        block = min(block, n_t)
+        n_blocks = int(np.ceil(n_t / block))
+    else:
+        P = np.concatenate([S, C], axis=0)
+    cnt_le = np.zeros(d_obs.shape)
+    cnt_ge = np.zeros(d_obs.shape)
+    n_ok = np.zeros(d_obs.shape)
+    samples = np.full((n_iter,) + d_obs.shape, np.nan, dtype=np.float32) if keep_samples else None
+    for i in range(n_iter):
+        if method == 'block':
+            starts = rng.integers(0, n_t - block + 1, n_blocks)
+            t_idx = (starts[:, None] + np.arange(block)).ravel()[:n_t]
+            em_s = S[rng.integers(0, S.shape[0], (n_t, S.shape[0])), t_idx[:, None]].mean(1)
+            em_c = C[rng.integers(0, C.shape[0], (n_t, C.shape[0])), t_idx[:, None]].mean(1)
+            obs = O[t_idx] if O is not None else None
+        else:
+            em_s = P[rng.integers(0, P.shape[0], P.shape[0])].mean(0)
+            em_c = P[rng.integers(0, P.shape[0], P.shape[0])].mean(0)
+            obs = O
+        d = stat(em_s, obs) - stat(em_c, obs)
+        ok = np.isfinite(d)
+        with np.errstate(invalid='ignore'):
+            n_ok += ok
+            cnt_le += ok & (d <= thr)
+            cnt_ge += ok & (d >= thr)
+        if samples is not None:
+            samples[i] = d
+
+    with np.errstate(invalid='ignore', divide='ignore'):
+        p = np.minimum(1.0, 2 * np.minimum(cnt_le, cnt_ge) / n_ok)
+    p[~np.isfinite(d_obs) | (n_ok == 0)] = np.nan
+    return d_obs, p, samples, sens, space
+
+
+def _null_quantiles(d_obs, samples, qs):
+    """Quantili nello stesso formato delle vecchie funzioni bootstrap_quantile_*
+    (un punto e' NON significativo se d_obs cade tra il quantile q e 1-q).
+
+    Il bootstrap a blocchi stima la distribuzione del delta, non quella nulla:
+    si usa la nulla equivalente N_q = d_obs - B_{1-q} (B = quantili bootstrap),
+    per cui "d_obs tra N_q e N_{1-q}" equivale a "lo 0 sta nell'intervallo
+    bootstrap [B_q, B_{1-q}]", cioe' lo stesso test del p-value."""
+    qs = np.asarray(qs, dtype=np.float64)
+    out = np.full((qs.size,) + d_obs.shape, np.nan)
+    finite = np.isfinite(samples)
+    full = finite.all(0)
+    idx = np.flatnonzero(full)
+    for k in range(0, idx.size, 4096):  # a pezzi, per non duplicare tutti i campioni
+        j = idx[k:k + 4096]
+        out[:, j] = np.quantile(samples[:, j].astype(np.float64), 1 - qs, axis=0)
+    for j in np.flatnonzero(~full & finite.any(0)):
+        out[:, j] = np.quantile(samples[finite[:, j], j].astype(np.float64), 1 - qs)
+    return d_obs[None, :] - out
+
+
+def _space_da(values, template, space, name, quantiles=None):
+    """Valori appiattiti -> DataArray sulle dimensioni spaziali di template
+    (con 'quantile' in testa se quantiles e' dato, come xarray .quantile)."""
+    dims = list(space)
+    shape = [template.sizes[d] for d in space]
+    coords = {d: template[d].values for d in space if d in template.coords}
+    if quantiles is not None:
+        dims = ['quantile'] + dims
+        shape = [len(quantiles)] + shape
+        coords['quantile'] = list(quantiles)
+    return xr.DataArray(np.asarray(values).reshape(shape), coords=coords, dims=dims, name=name)
+
+
+def _block_quantiles(sens, ctrl, ref, statistic, qs, iterations, block, seed):
+    d_obs, _, samples, template, space = _block_bootstrap_delta(
+        sens, ctrl, ref, statistic=statistic, method='block',
+        n_iter=iterations, block=block, seed=seed, keep_samples=True)
+    return _space_da(_null_quantiles(d_obs, samples, qs), template, space, sens.name, quantiles=qs)
+
+
+def _per_variable(func, sens, ctrl, ref, **kwargs):
+    """Con Dataset in ingresso applica func a ogni variabile con dimensioni
+    (member, time) presente in tutti gli ingressi e ritorna un Dataset, come
+    facevano le vecchie funzioni; con DataArray chiama func direttamente."""
+    if not isinstance(sens, xr.Dataset):
+        return func(sens, ctrl, ref, **kwargs)
+    out = {}
+    for v, da in sens.data_vars.items():
+        if not {'member', 'time'} <= set(da.dims) or v not in ctrl:
+            continue
+        if isinstance(ref, xr.Dataset):
+            if v not in ref:
+                continue
+            r = ref[v]
+        else:
+            r = ref
+        out[v] = func(da, ctrl[v], r, **kwargs)
+    return xr.Dataset(out)
+
+
+def block_bootstrap_quantile_correlation(sens, ctrl, ref, iterations=1000, block=5, seed=0):
+    """Come bootstrap_quantile_correlation (stessi argomenti, stesso formato
+    di uscita: quantili [0.005 ... 0.995] lungo 'quantile', da usare con
+    map_plot(type='quantile')), ma col bootstrap a blocchi di Goddard/Smith
+    (vedi _block_bootstrap_delta) e i quantili della nulla equivalente (vedi
+    _null_quantiles).
+
+    sens, ctrl: anomalie (member, time, lat, lon); ref: anomalie (time, lat, lon).
+    DataArray o Dataset (in quel caso variabile per variabile).
+    Memoria: tiene i campioni in float32 (circa 260 MB per 1000 iterazioni
+    su griglia 1x1)."""
+    return _per_variable(_block_quantiles, sens, ctrl, ref, statistic='acc', qs=_QS_CORR,
+                         iterations=iterations, block=block, seed=seed)
+
+
+def block_bootstrap_quantile_bias(sens, ctrl, ref=None, iterations=1000, block=5, seed=0):
+    """Come bootstrap_quantile_bias di bias_lib.py (stesso formato di uscita:
+    quantili [0.025 ... 0.975] lungo 'quantile'), col bootstrap a blocchi di
+    Goddard/Smith applicato alla differenza di bias SENS - CTRL.
+
+    ATTENZIONE all'ordine: SENS prima, CTRL dopo (la vecchia chiamata in
+    bias_lib passava CTRL per primo; per il vecchio metodo era indifferente).
+    ref: osservazione con 'time', usata solo per allineare gli anni come nelle
+    mappe di bias (nella differenza si elide); None o senza 'time' -> ignorata."""
+    return _per_variable(_block_quantiles, sens, ctrl, ref, statistic='bias', qs=_QS_BIAS,
+                         iterations=iterations, block=block, seed=seed)
+
+
+def block_bootstrap_acc_significance(sens_anom, ctrl_anom, ref_anom, iterations=1000, alpha=0.05, block=5, seed=0):
+    """Come bootstrap_acc_significance (serie globali, dim member e time;
+    ritorna 1.0 se significativa, altrimenti 0.0), col bootstrap a blocchi di
+    Goddard/Smith: significativa se p < alpha (bilatero)."""
+    _, p, _, _, _ = _block_bootstrap_delta(sens_anom, ctrl_anom, ref_anom, statistic='acc', method='block',
+                                           n_iter=iterations, block=block, seed=seed)
+    if p.size != 1:
+        raise ValueError("block_bootstrap_acc_significance vuole serie senza dimensioni spaziali")
+    return float(p[0] < alpha)
+
+
+def block_bootstrap_delta_pvalue(sens, ctrl, ref, statistic='acc', n_iter=1000, block=5, seed=0):
+    """p-value bilatero per punto della differenza SENS - CTRL col bootstrap a
+    blocchi di Goddard/Smith (vedi _block_bootstrap_delta).
+
+    sens, ctrl: DataArray (member, time, lat, lon); ref: DataArray (time, lat, lon).
+    Ritorna (p, delta_osservato) come DataArray (lat, lon). Non tiene in
+    memoria le iterazioni: la memoria non cresce con n_iter."""
+    d_obs, p, _, template, space = _block_bootstrap_delta(sens, ctrl, ref, statistic=statistic, method='block',
+                                                          n_iter=n_iter, block=block, seed=seed)
+    return _space_da(p, template, space, 'p'), _space_da(d_obs, template, space, sens.name)
+
+
+def pooled_bootstrap_delta_pvalue(sens, ctrl, ref, statistic='acc', n_iter=1000, seed=0):
+    """Alternativa a block_bootstrap_delta_pvalue col vecchio ricampionamento
+    di bootstrap_quantile_correlation (pool SENS+CTRL, anni fissi), ma con
+    p-value continuo e senza tenere in memoria le iterazioni. Su dati
+    sintetici senza vera differenza da' il 12-20% di falsi positivi a p<0.05.
+    Stessi ingressi e uscite di block_bootstrap_delta_pvalue."""
+    d_obs, p, _, template, space = _block_bootstrap_delta(sens, ctrl, ref, statistic=statistic, method='pooled',
+                                                          n_iter=n_iter, seed=seed)
+    return _space_da(p, template, space, 'p'), _space_da(d_obs, template, space, sens.name)
+
+##################################################################################
 def bootstrap_single_correlation(ds, ref, iterations=1000):
     # Optimize chunking for ds and ref
     ds = ds.chunk({'time': -1, 'member': -1})
