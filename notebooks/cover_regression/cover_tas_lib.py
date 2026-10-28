@@ -1,0 +1,817 @@
+"""Regressione tra vegetation cover (cvh/cvl) e temperatura, per combinazione di
+lead year (annuale, come 07-covariance_regression.ipynb).
+
+Due disegni distinti (vedi le due funzioni run_one_adapted / run_one_literal):
+
+ADATTATO (01): delta_tas (SENS-CTRL) vs delta_cover (SENS-CTRL). Non richiede
+osservazioni indipendenti di cover: dato che SENS e' forzato con le osservazioni
+di vegetation cover (per costruzione cover_SENS ~ obs), delta_cover = cover_SENS
+- cover_CTRL rappresenta gia' la correzione rispetto al modello di vegetazione
+dinamico di CTRL. Analisi non circolare.
+
+LETTERALE (02): replica esatta dello schema 06/06b/07 (skill-vs-obs per SENS e
+CTRL, poi delta), usando cover_SENS come proxy delle osservazioni. Per SENS lo
+skill sara' quasi banale (SENS ~ obs per costruzione): incluso comunque su
+richiesta esplicita, come termine di confronto con l'analisi adattata.
+
+Le funzioni di lettura dati (tas, cover) sono CONDIVISE tra i due disegni.
+
+Compatibilita' cover/tas: i file di cover (cvh/cvl) sono una serie temporale
+CONTINUA (1993-2019, nessuna dimensione member, non organizzata per lead year),
+mentre tas e' un hindcast DCPP (member x lead-year, 'time' = un valore per anno
+di inizializzazione). Allineamento per ANNO SOLARE (stessa tecnica gia'
+validata per il bias stagionale): si converte 'time' in anno e si intersecano i
+due dataset sugli anni in comune.
+
+Esecuzione in processi 'spawn' freschi (multiprocessing.Pool con
+maxtasksperchild=1): lezione appresa dal debug del bias stagionale in questa
+stessa sessione (ProcessPoolExecutor con worker riusati e' fragile, netCDF4/
+HDF5 su NFS).
+"""
+import os
+import sys
+
+_cfg = os.path.dirname(os.path.abspath(__file__))
+while _cfg != os.path.dirname(_cfg):
+    if os.path.exists(os.path.join(_cfg, "config.py")):
+        if _cfg not in sys.path:
+            sys.path.insert(0, _cfg)
+        break
+    _cfg = os.path.dirname(_cfg)
+
+os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
+
+import numpy as np
+import pandas as pd
+import xarray as xr
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from scipy import stats
+
+from config import POST_DATA, WORK_DIR, ERA5_ROOT, FIG_DIR
+import albedo_functions as af
+
+# Box di riferimento (Siberia), stessi valori di 07-covariance_regression.ipynb
+# e 08-covariance_plot.ipynb (analisi albedo-temperatura).
+LAT_MIN, LAT_MAX, LON_MIN, LON_MAX = 54, 70, 88, 110
+
+LEADS = [(y1, y2) for y1 in range(5) for y2 in range(y1 + 1, 5)]
+
+
+def _slope_pvalue(a, b):
+    """Come af.compute_slope_and_pvalue, ma senza il riferimento a 'x' non
+    definito presente nell'originale (bug preesistente in albedo_functions.py,
+    non toccato qui perche' condiviso con altro codice)."""
+    mask = ~np.isnan(a) & ~np.isnan(b)
+    if np.sum(mask) < 3 or np.all(a[mask] == a[mask][0]):
+        return np.nan, np.nan
+    slope, intercept, r, p, std_err = stats.linregress(a[mask], b[mask])
+    return slope, p
+
+
+def _mask_low_variance(da, pct=10, threshold=None):
+    """Maschera (NaN) i pixel dove la variabilita' temporale di da e' troppo
+    bassa. Serve a evitare slope instabili: se delta_cover varia pochissimo in
+    un pixel (es. aree non vegetate), lo slope = covarianza/varianza(x)
+    esplode anche per covarianza minima, dividendo per una varianza vicina a
+    zero (valori visti >10000, anche dopo il taglio al percentile 10 - la
+    maggior parte dei pixel ha evidentemente varianza bassa, non solo la coda).
+
+    threshold: se fornito (valore assoluto di std, scelto guardando la
+    distribuzione reale con debug_cover_variance), ha precedenza sul
+    percentile - vedi quella funzione per scegliere un numero informato
+    invece di indovinare."""
+    std = da.std("time")
+    if threshold is None:
+        threshold = np.nanpercentile(std.values, pct)
+    return da.where(std > threshold)
+
+
+def debug_cover_variance(exp_ctrl, exp_sens, var):
+    """Da eseguire PRIMA del calcolo completo: mostra la distribuzione reale
+    di std(delta_cover) per pixel e quanti pixel verrebbero esclusi a diverse
+    soglie fisse candidate, per scegliere una soglia informata da passare a
+    _mask_low_variance(..., threshold=...) invece di indovinare un numero."""
+    cov_ctrl = _load_cover(exp_ctrl, var)
+    cov_sens = _load_cover(exp_sens, var)
+    cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+    cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+    cov_anom_sens = cov_sens - cov_sens.mean("time")
+    delta_cover = cov_anom_sens - cov_anom_ctrl
+    std = delta_cover.std("time")
+    vals = std.values[np.isfinite(std.values)]
+
+    print(f"--- distribuzione std(delta_{var}) nel tempo, per pixel (n={vals.size}) ---")
+    for p in [1, 5, 10, 25, 50, 75, 90, 95, 99]:
+        print(f"  percentile {p:3d}: {np.percentile(vals, p):.6g}")
+    print(f"  min={vals.min():.6g}  max={vals.max():.6g}  mean={vals.mean():.6g}")
+    print()
+    print("--- pixel esclusi a diverse soglie fisse candidate ---")
+    for thr in [1e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2]:
+        n_excl = int((vals <= thr).sum())
+        print(f"  soglia {thr:.0e}: esclude {n_excl}/{vals.size} pixel ({100 * n_excl / vals.size:.1f}%)")
+
+
+def _load_tas_ensemble(exp, lead):
+    """Media d'ensemble di tas per un lead-year combo (annuale), con 'time'
+    convertito in anno solare. Stesso file gia' usato da 04-BIAS/06b."""
+    ds = xr.open_dataset(
+        POST_DATA / exp / "1x1" / "tas" /
+        f"{exp}_tas_Amon_EC-Earth3_dcppA-hindcast_lead_{lead}_1x1_ensemble_rad.nc")
+    em = ds["tas"].mean("member")
+    em = em.assign_coords(time=pd.to_datetime(em["time"].values).year)
+    return em
+
+
+def _load_cover(exp, var):
+    """Serie temporale continua di vegetation cover, 'time' in anno solare.
+    var='cvh'/'cvl': nomi file identici a quelli gia' usati in Fig1/Fig2
+    (final_figure). var='cvt': cover totale, somma di cvh e cvl (non esiste
+    un file dedicato, si costruisce sommando le due componenti gia' allineate
+    sugli stessi anni)."""
+    if var == "cvt":
+        cvh = _load_cover(exp, "cvh")
+        cvl = _load_cover(exp, "cvl")
+        cvh, cvl = xr.align(cvh, cvl, join="inner")
+        return cvh + cvl
+
+    if exp == "a1ua":
+        fname = f"{exp}_effective_{var}_1x1.nc"
+    else:
+        fname = f"{exp}_effective_{var}_199311-201910_1x1.nc"
+    da = xr.open_dataset(POST_DATA / fname)[var]
+    da = da.assign_coords(time=pd.to_datetime(da["time"].values).year)
+    # media annuale: la serie e' mensile, il confronto con tas e' per anno
+    da = da.groupby("time").mean("time")
+    return da
+
+
+def _era5_obs(era_var, lead_number):
+    """ERA5 alla risoluzione del lead-year combo (stesso file usato da 06b/04-BIAS)."""
+    obs = xr.open_dataset(WORK_DIR / f"ERA5_{era_var}_1x1_{lead_number}year.nc")
+    obs = obs.rename({era_var: "tas"})["tas"].assign_coords(
+        time=pd.to_datetime(obs["time"].values).year)
+    return obs
+
+
+def _load_albedo_ensemble(exp, lead):
+    """Media d'ensemble di albedo per un lead-year combo (annuale). Stesso
+    pattern di file di _load_tas_ensemble, var='alb' (come 06-covariance_albedo.ipynb)."""
+    ds = xr.open_dataset(
+        POST_DATA / exp / "1x1" / "alb" /
+        f"{exp}_alb_Amon_EC-Earth3_dcppA-hindcast_lead_{lead}_1x1_ensemble_rad.nc")
+    em = ds["alb"].mean("member")
+    em = em.assign_coords(time=pd.to_datetime(em["time"].values).year)
+    return em
+
+
+def _glass_obs(lead_number):
+    """Osservazioni GLASS di albedo, obs indipendente vera (a differenza della
+    cover: qui non serve nessun disegno ibrido, come 06-covariance_albedo.ipynb)."""
+    obs = xr.open_dataset(WORK_DIR / f"GLASS_1x1_{lead_number}year.nc")
+    obs = obs.rename({"bb_albedo": "alb"})["alb"].assign_coords(
+        time=pd.to_datetime(obs["time"].values).year)
+    return obs
+
+
+def _load_snow_ensemble(exp, lead, var="snd"):
+    """Media d'ensemble di neve per un lead-year combo (annuale). Stesso pattern
+    di file di _load_tas_ensemble/_load_albedo_ensemble. Variabile di default
+    'snd' (snow depth); 'sd' dovrebbe essere equivalente, cambiare qui se serve.
+
+    Trovato con debug_snow_lon: il file 'snd' di CTRL (a1ua) e' su una
+    griglia lon centrata a mezzo grado (-179.5..179.5), diversa da quella a
+    gradi interi (0..359) di SENS e dell'obs ERA5 - le altre variabili di
+    CTRL (tas, alb) non hanno questo problema, sembra specifico del
+    postprocessing di questo file. Rilevato dai valori frazionari (non
+    dall'esperimento, cosi' il fix si applica solo se serve davvero) e
+    corretto riportando la griglia sui gradi interi (errore posizionale
+    max 0.5 gradi, trascurabile per il box 22x22 gradi usato qui)."""
+    ds = xr.open_dataset(
+        POST_DATA / exp / "1x1" / var /
+        f"{exp}_{var}_Amon_EC-Earth3_dcppA-hindcast_lead_{lead}_1x1_ensemble_rad.nc")
+    if var == "snd":
+        lon = ds["lon"]
+        if not np.allclose(lon.values % 1, 0, atol=1e-6):
+            lon = lon - 0.5
+        ds = ds.assign_coords(lon=lon % 360).sortby("lon")
+    em = ds[var].mean("member")
+    em = em.assign_coords(time=pd.to_datetime(em["time"].values).year)
+    # visto sul cluster: SENS lead 0-1 ha un timestamp grezzo in piu' che
+    # collassa sullo stesso anno solare di un altro (2012 duplicato) ->
+    # 'time' con indice non unico, xr.align fallisce con "duplicate values".
+    # Stessa tecnica gia' usata in _load_cover per gestire duplicati.
+    em = em.groupby("time").mean("time")
+    return em
+
+
+def _era5_snow_obs(lead_number, var="snd"):
+    """Osservazioni ERA5 di neve, obs indipendente vera come per tas/albedo:
+    nessun disegno ibrido necessario. Il nome della variabile nel file obs
+    coincide gia' con 'var' (nessun rename, a differenza di alb/tas)."""
+    obs = xr.open_dataset(WORK_DIR / f"ERA5_{var}_1x1_{lead_number}year.nc")
+    obs = obs[var].assign_coords(time=pd.to_datetime(obs["time"].values).year)
+    # difensivo, stesso motivo di _load_snow_ensemble
+    obs = obs.groupby("time").mean("time")
+    return obs
+
+
+def debug_snow_load(exp_ctrl, exp_sens, y1, y2, var="snd"):
+    """Da eseguire PRIMA del batch (stesso principio di debug_cover_variance/
+    debug_years): ispeziona la forma REALE dei file di neve (model ensemble
+    per CTRL/SENS + obs ERA5) senza passare da assign_coords, per capire
+    l'origine di 'duplicate values' / 'conflicting sizes' visti in batch -
+    entrambi sintomi di un 'time' che non e' quello atteso (o non e' un array
+    di lunghezza pari alle altre dimensioni, o contiene piu' timestamp che
+    cadono nello stesso anno solare)."""
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+
+    for label, exp in [("CTRL", exp_ctrl), ("SENS", exp_sens)]:
+        path = POST_DATA / exp / "1x1" / var / \
+            f"{exp}_{var}_Amon_EC-Earth3_dcppA-hindcast_lead_{lead}_1x1_ensemble_rad.nc"
+        ds = xr.open_dataset(path)
+        traw = ds["time"].values
+        print(f"--- {label} {var} {lead} ({path.name}) ---")
+        print(f"  dims: {dict(ds[var].sizes)}")
+        print(f"  time raw (n={traw.size}): {traw[:5]} ... {traw[-3:]}" if traw.size > 8 else f"  time raw: {traw}")
+        years = pd.to_datetime(traw).year
+        print(f"  anni dopo .year (n={years.size}): {sorted(years)}")
+        dup = pd.Series(years).duplicated()
+        if dup.any():
+            print(f"  ATTENZIONE: {dup.sum()} anni duplicati dopo la conversione")
+        print()
+
+    obs_path = WORK_DIR / f"ERA5_{var}_1x1_{lead_number}year.nc"
+    obs = xr.open_dataset(obs_path)
+    traw_obs = obs["time"].values
+    print(f"--- OBS {var} lead_number={lead_number} ({obs_path.name}) ---")
+    print(f"  variabili nel file: {list(obs.data_vars)}")
+    print(f"  dims: {dict(obs[var].sizes) if var in obs.data_vars else 'VARIABILE ASSENTE'}")
+    print(f"  time raw (n={traw_obs.size}): {traw_obs[:5]} ... {traw_obs[-3:]}" if traw_obs.size > 8 else f"  time raw: {traw_obs}")
+
+
+def debug_snow_lon(exp_ctrl, exp_sens, y1, y2, var="snd"):
+    """Trovato con debug_snow_pipeline: dopo xr.align(snow_ctrl, obs) 'lon'
+    diventa size 0 (intersezione vuota), ma xr.align(snow_sens, obs) resta a
+    360 - quindi la griglia lon GREZZA di CTRL e SENS non e' identica, e il
+    fix %360+sortby (aggiunto per analogia con codice mai eseguito) la rompe
+    per uno dei due. Confronta le griglie lon effettive, prima e dopo il fix,
+    contro l'obs, per capire quale file ha davvero bisogno del fix (se uno)."""
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+
+    def lon_info(lon, label):
+        v = lon.values if hasattr(lon, "values") else lon
+        print(f"  {label}: n={v.size}  min={v.min():.4f}  max={v.max():.4f}"
+              f"  primi 5={v[:5]}  ultimi 5={v[-5:]}  sorted={bool((v[:-1] <= v[1:]).all())}")
+
+    lons = {}
+    for label, exp in [("CTRL", exp_ctrl), ("SENS", exp_sens)]:
+        path = POST_DATA / exp / "1x1" / var / \
+            f"{exp}_{var}_Amon_EC-Earth3_dcppA-hindcast_lead_{lead}_1x1_ensemble_rad.nc"
+        ds = xr.open_dataset(path)
+        print(f"--- {label} lon GREZZO ---")
+        lon_info(ds["lon"], label)
+        fixed = (ds["lon"] % 360).values
+        fixed_sorted = np.sort(fixed)
+        print(f"--- {label} lon DOPO %360+sort ---")
+        lon_info(fixed_sorted, label)
+        lons[label] = (ds["lon"].values, fixed_sorted)
+
+    obs_path = WORK_DIR / f"ERA5_{var}_1x1_{lead_number}year.nc"
+    obs = xr.open_dataset(obs_path)
+    print("--- OBS lon ---")
+    lon_info(obs["lon"], "OBS")
+    obs_lon = obs["lon"].values
+
+    print()
+    print("--- intersezioni (numero di valori lon in comune, tolleranza esatta) ---")
+    for label in ["CTRL", "SENS"]:
+        raw, fixed = lons[label]
+        n_raw = np.intersect1d(raw, obs_lon).size
+        n_fixed = np.intersect1d(fixed, obs_lon).size
+        print(f"  {label}: grezzo vs obs = {n_raw}/{obs_lon.size}   dopo %360+sort vs obs = {n_fixed}/{obs_lon.size}")
+
+
+def debug_snow_pipeline(exp_ctrl, exp_sens, y1, y2, snow_var="snd"):
+    """Da eseguire se debug_snow_load NON riproduce l'errore visto in batch
+    (successo per lead 1-2 nonostante 'conflicting sizes' in run_one_cover_snow):
+    ripete la stessa sequenza di run_one_cover_snow passo-passo, stampando la
+    shape/anni di ogni oggetto intermedio, per individuare ESATTAMENTE quale
+    xr.align/operazione fallisce quando i file grezzi risultano puliti."""
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+
+    def shape(da, label):
+        t = da["time"].values if "time" in da.coords else None
+        print(f"  {label}: dims={dict(da.sizes)}  anni={sorted(t) if t is not None else 'n/d'}")
+
+    print(f"=== debug_snow_pipeline {lead} (snow_var={snow_var}) ===")
+
+    snow_ctrl = _load_snow_ensemble(exp_ctrl, lead, snow_var)
+    shape(snow_ctrl, "snow_ctrl (dopo _load_snow_ensemble)")
+    snow_sens = _load_snow_ensemble(exp_sens, lead, snow_var)
+    shape(snow_sens, "snow_sens (dopo _load_snow_ensemble)")
+    obs_snow = _era5_snow_obs(lead_number, snow_var)
+    shape(obs_snow, "obs_snow (dopo _era5_snow_obs)")
+
+    snow_ctrl, obs_snow_c = xr.align(snow_ctrl, obs_snow, join="inner")
+    shape(snow_ctrl, "snow_ctrl (dopo align con obs)")
+    shape(obs_snow_c, "obs_snow_c (dopo align con ctrl)")
+    snow_sens, obs_snow_s = xr.align(snow_sens, obs_snow, join="inner")
+    shape(snow_sens, "snow_sens (dopo align con obs)")
+    shape(obs_snow_s, "obs_snow_s (dopo align con sens)")
+
+    anom_ctrl = snow_ctrl - snow_ctrl.mean("time")
+    anom_sens = snow_sens - snow_sens.mean("time")
+    anom_obs_c = obs_snow_c - obs_snow_c.mean("time")
+    anom_obs_s = obs_snow_s - obs_snow_s.mean("time")
+    skill_snow_ctrl = (anom_ctrl * anom_obs_c) / (snow_ctrl.std("time") * obs_snow_c.std("time"))
+    skill_snow_sens = (anom_sens * anom_obs_s) / (snow_sens.std("time") * obs_snow_s.std("time"))
+    shape(skill_snow_ctrl, "skill_snow_ctrl (prima dell'align finale)")
+    shape(skill_snow_sens, "skill_snow_sens (prima dell'align finale)")
+
+    skill_snow_ctrl, skill_snow_sens = xr.align(skill_snow_ctrl, skill_snow_sens, join="inner")
+    delta_skill_snow = skill_snow_sens - skill_snow_ctrl
+    shape(delta_skill_snow, "delta_skill_snow (finale)")
+
+    cov_ctrl = _load_cover(exp_ctrl, "cvh")
+    shape(cov_ctrl, "cov_ctrl (dopo _load_cover)")
+    cov_sens = _load_cover(exp_sens, "cvh")
+    shape(cov_sens, "cov_sens (dopo _load_cover)")
+    cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+    cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+    cov_anom_sens = cov_sens - cov_sens.mean("time")
+    delta_cover = cov_anom_sens - cov_anom_ctrl
+    delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)
+    shape(delta_cover, "delta_cover (mascherato)")
+
+    delta_skill_snow, delta_cover = xr.align(delta_skill_snow, delta_cover, join="inner")
+    shape(delta_skill_snow, "delta_skill_snow (dopo align finale con cover)")
+    print("=== fine, nessun errore ===")
+
+
+def _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel, rho=None, p_spearman=None):
+    """Come af.lr_plot, ma senza i due difetti che la rendono inadatta alla
+    cover (i cui delta sono ~100x piu' piccoli di quelli dell'albedo):
+    (1) limiti degli assi FISSI a [-1,2] (qui: automatici, con margine);
+    (2) etichette 'time' convertite in anno (int) passate a pd.to_datetime,
+    che le interpreta come nanosecondi dall'epoca Unix -> tutte '1970'
+    (qui: l'anno e' gia' un intero, si annota direttamente).
+
+    Se rho/p_spearman sono forniti, li aggiunge in legenda accanto a
+    slope/r/p (Pearson): la relazione potrebbe essere monotona ma non
+    lineare, e Spearman lo cattura mentre linregress no."""
+    fig, ax = plt.subplots(figsize=[10, 8])
+    ax.scatter(box_x, box_y, label="Dati", c="blue", alpha=0.7)
+    label = f"Pearson: p={p:.2f}, r={r:.2f}"
+    if rho is not None:
+        label += f"\nSpearman: rho={rho:.2f}, p={p_spearman:.2f}"
+    ax.plot(box_x, y_pred, color="red", linewidth=2, label=label)
+
+    if hasattr(box_x, "time"):
+        for xi, yi, year in zip(box_x.values, box_y.values, box_x["time"].values):
+            ax.annotate(int(year), (xi, yi), fontsize=10, color="black")
+
+    xpad = 0.1 * (box_x.values.max() - box_x.values.min() or 1)
+    ypad = 0.1 * (box_y.values.max() - box_y.values.min() or 1)
+    ax.set_xlim(box_x.values.min() - xpad, box_x.values.max() + xpad)
+    ax.set_ylim(box_y.values.min() - ypad, box_y.values.max() + ypad)
+
+    ax.set_title(title, fontsize=18)
+    ax.set_xlabel(xlabel, fontsize=16)
+    ax.set_ylabel(ylabel, fontsize=16)
+    ax.tick_params(axis="both", labelsize=12)
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(fontsize=12, loc="best")
+    plt.tight_layout()
+
+
+def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_out,
+                            xlabel="delta cover", ylabel="delta tas"):
+    """Regressione per pixel (mappa, af.map_plot) + regressione scalare sul box
+    Siberia (scatter, _scatter_plot). delta_x, delta_y: (time=anno, lat, lon),
+    gia' allineati sugli stessi anni."""
+    slope_map, p_map = xr.apply_ufunc(
+        _slope_pvalue, delta_x, delta_y,
+        input_core_dims=[["time"], ["time"]],
+        vectorize=True, output_dtypes=[float, float], output_core_dims=[[], []],
+    )
+    af.map_plot(slope_map, p_map, levels=_auto_levels(slope_map),
+               title=title, cmap="bwr", sign=0.90)
+    plt.savefig(png_map, dpi=300, bbox_inches="tight")
+    plt.close("all")
+
+    box_x = af.domain_selection(delta_x, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX)
+    box_y = af.domain_selection(delta_y, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX)
+    box_x, box_y = xr.align(box_x, box_y, join="inner")
+    slope, intercept, r, p, std_err = stats.linregress(box_x.values, box_y.values)
+    y_pred = slope * box_x.values + intercept
+
+    _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel)
+    plt.savefig(png_scatter, dpi=300, bbox_inches="tight")
+    plt.close("all")
+
+    xr.Dataset({
+        "delta_x": box_x, "delta_y": box_y,
+        "slope": xr.DataArray(slope), "intercept": xr.DataArray(intercept),
+        "r": xr.DataArray(r), "p": xr.DataArray(p), "std_err": xr.DataArray(std_err),
+        "y_pred": xr.DataArray(y_pred, dims=["time"], coords={"time": box_x.time}),
+    }).to_netcdf(nc_out)
+
+
+def _slope_pvalue_full(a, b):
+    """Come _slope_pvalue, ma calcola ANCHE il coefficiente di correlazione r
+    di Pearson (limitato in [-1,1], a differenza dello slope) e la
+    correlazione di rango di Spearman: la relazione tra delta_cover e
+    delta_skill_tas potrebbe essere monotona ma non lineare, e confrontare r
+    (lineare) con rho (monotona) lo rivela - a differenza di slope vs rho, che
+    non sono direttamente comparabili (slope non e' limitato, dipende dalle
+    unita' delle due variabili; r e rho sono entrambi in [-1,1])."""
+    mask = ~np.isnan(a) & ~np.isnan(b)
+    if np.sum(mask) < 3 or np.all(a[mask] == a[mask][0]):
+        return np.nan, np.nan, np.nan, np.nan, np.nan
+    slope, intercept, r, p, std_err = stats.linregress(a[mask], b[mask])
+    rho, p_spear = stats.spearmanr(a[mask], b[mask])
+    return slope, r, p, rho, p_spear
+
+
+def _auto_levels(data, n=10):
+    """Livelli simmetrici attorno a 0 basati sui percentili dei dati (2-98%,
+    robusto agli outlier), non su un valore fisso. Serve per lo slope Pearson:
+    Y=delta_skill_tas (adimensionale) diviso X=delta_cover (frazione, molto
+    piccola) puo' dare slope di ordine di grandezza molto diverso da quello
+    dell'albedo (per cui i livelli fissi [-2,...,2] erano tarati), saturando
+    la colorbar se riusati cosi' com'erano."""
+    finite = data.values[np.isfinite(data.values)]
+    if finite.size == 0:
+        return [-1, -0.5, 0, 0.5, 1]
+    vmax = np.nanpercentile(np.abs(finite), 98)
+    if not np.isfinite(vmax) or vmax == 0:
+        vmax = 1.0
+    edges = np.linspace(0, vmax, n // 2 + 1)[1:]
+    return [-vmax * 1.5] + list(-edges[::-1]) + [0] + list(edges) + [vmax * 1.5]
+
+
+def _map_and_box_regression_hybrid(delta_x, delta_y, title, png_base, nc_out, xlabel, ylabel):
+    """Come _map_and_box_regression, ma con TRE mappe (Pearson slope, Pearson r
+    e Spearman rho, ciascuna con la propria significativita') e lo scatter con
+    entrambe le statistiche in legenda. Usata solo da run_one_hybrid (notebook 03).
+
+    r e rho usano la STESSA scala/colormap (entrambi in [-1,1]) apposta, per
+    essere confrontabili a colpo d'occhio: se divergono, la relazione e'
+    monotona ma non lineare. Lo slope resta su una mappa separata (unita'
+    reali, non limitato) perche' non e' la stessa cosa di una correlazione."""
+    slope_map, r_map, p_map, rho_map, p_spear_map = xr.apply_ufunc(
+        _slope_pvalue_full, delta_x, delta_y,
+        input_core_dims=[["time"], ["time"]],
+        vectorize=True, output_dtypes=[float, float, float, float, float],
+        output_core_dims=[[], [], [], [], []],
+    )
+
+    af.map_plot(slope_map, p_map, levels=_auto_levels(slope_map),
+               title=f"{title} (Pearson, slope)", cmap="bwr", sign=0.90)
+    plt.savefig(f"{png_base}_map_pearson.png", dpi=300, bbox_inches="tight")
+    plt.close("all")
+
+    af.map_plot(r_map, p_map, levels=[-1, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 1],
+               title=f"{title} (Pearson, r)", cmap="PuOr", sign=0.90)
+    plt.savefig(f"{png_base}_map_pearson_r.png", dpi=300, bbox_inches="tight")
+    plt.close("all")
+
+    af.map_plot(rho_map, p_spear_map, levels=[-1, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 1],
+               title=f"{title} (Spearman, rho)", cmap="PuOr", sign=0.90)
+    plt.savefig(f"{png_base}_map_spearman.png", dpi=300, bbox_inches="tight")
+    plt.close("all")
+
+    box_x = af.domain_selection(delta_x, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX)
+    box_y = af.domain_selection(delta_y, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX)
+    box_x, box_y = xr.align(box_x, box_y, join="inner")
+    slope, intercept, r, p, std_err = stats.linregress(box_x.values, box_y.values)
+    rho, p_spear = stats.spearmanr(box_x.values, box_y.values)
+    y_pred = slope * box_x.values + intercept
+
+    _scatter_plot(box_x, box_y, y_pred, p, r, title, xlabel, ylabel, rho=rho, p_spearman=p_spear)
+    plt.savefig(f"{png_base}_scatter.png", dpi=300, bbox_inches="tight")
+    plt.close("all")
+
+    xr.Dataset({
+        "delta_x": box_x, "delta_y": box_y,
+        "slope": xr.DataArray(slope), "intercept": xr.DataArray(intercept),
+        "r": xr.DataArray(r), "p": xr.DataArray(p), "std_err": xr.DataArray(std_err),
+        "rho_spearman": xr.DataArray(rho), "p_spearman": xr.DataArray(p_spear),
+        "y_pred": xr.DataArray(y_pred, dims=["time"], coords={"time": box_x.time}),
+    }).to_netcdf(nc_out)
+
+
+def run_one_hybrid(args):
+    """Notebook 3 (disegno ibrido): prende il pezzo valido di ciascun metodo.
+
+    X = delta_cover (come Notebook 1/adattato: cover_SENS - cover_CTRL). Non
+    circolare: SENS e' forzato con le osservazioni, quindi delta_cover misura
+    genuinamente l'entita' della correzione rispetto al modello di vegetazione
+    dinamico di CTRL.
+
+    Y = delta_skill_tas (come Notebook 2/letterale, ma SOLO il lato tas, dove
+    ERA5 e' un riferimento osservativo vero e indipendente). E' un genuino
+    miglioramento di skill (non solo una differenza di anomalie come nel
+    Notebook 1), e non soffre della circolarita' che affligge lo skill della
+    cover nel Notebook 2 (qui la cover non viene mai confrontata con "se
+    stessa": si usa solo la sua differenza SENS-CTRL).
+    """
+    exp_ctrl, exp_sens, var, era_var, y1, y2, save_path = args
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+    try:
+        # --- Y: delta skill tas (vs ERA5, genuino miglioramento di skill) ---
+        tas_ctrl = _load_tas_ensemble(exp_ctrl, lead)
+        tas_sens = _load_tas_ensemble(exp_sens, lead)
+        obs_tas = _era5_obs(era_var, lead_number)
+        tas_ctrl, obs_tas_c = xr.align(tas_ctrl, obs_tas, join="inner")
+        tas_sens, obs_tas_s = xr.align(tas_sens, obs_tas, join="inner")
+
+        anom_ctrl = tas_ctrl - tas_ctrl.mean("time")
+        anom_sens = tas_sens - tas_sens.mean("time")
+        anom_obs_c = obs_tas_c - obs_tas_c.mean("time")
+        anom_obs_s = obs_tas_s - obs_tas_s.mean("time")
+        skill_tas_ctrl = (anom_ctrl * anom_obs_c) / (tas_ctrl.std("time") * obs_tas_c.std("time"))
+        skill_tas_sens = (anom_sens * anom_obs_s) / (tas_sens.std("time") * obs_tas_s.std("time"))
+        skill_tas_ctrl, skill_tas_sens = xr.align(skill_tas_ctrl, skill_tas_sens, join="inner")
+        delta_skill_tas = skill_tas_sens - skill_tas_ctrl
+
+        # --- X: delta cover (non circolare, come Notebook 1) ---
+        cov_ctrl = _load_cover(exp_ctrl, var)
+        cov_sens = _load_cover(exp_sens, var)
+        cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+        cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+        cov_anom_sens = cov_sens - cov_sens.mean("time")
+        delta_cover = cov_anom_sens - cov_anom_ctrl
+        # maschera i pixel dove delta_cover varia pochissimo (aree non vegetate):
+        # senza, lo slope esplode dividendo per una varianza vicina a zero
+        delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)
+
+        delta_skill_tas, delta_cover = xr.align(delta_skill_tas, delta_cover, join="inner")
+        if delta_skill_tas.sizes.get("time", 0) < 3:
+            return f"{var} {lead} SALTATO: solo {delta_skill_tas.sizes.get('time', 0)} anni in comune"
+
+        title = f"hybrid_delta_skill_tas_vs_delta_{var}_{lead}"
+        _map_and_box_regression_hybrid(
+            delta_cover, delta_skill_tas, title,
+            f"{save_path}/{title}",
+            f"{POST_DATA}/hybrid_regression_{var}_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel=f"delta {var} (SENS-CTRL)", ylabel="delta skill tas (SENS-CTRL, vs ERA5)",
+        )
+        return f"{var} {lead} ok ({delta_skill_tas.sizes['time']} anni)"
+    except Exception as e:
+        return f"{var} {lead} ERRORE: {type(e).__name__}: {e}"
+
+
+def run_one_adapted(args):
+    """Notebook 1: delta_tas (SENS-CTRL) vs delta_cover (SENS-CTRL)."""
+    exp_ctrl, exp_sens, var, y1, y2, save_path = args
+    lead = f"{y1}-{y2}"
+    try:
+        tas_ctrl = _load_tas_ensemble(exp_ctrl, lead)
+        tas_sens = _load_tas_ensemble(exp_sens, lead)
+        anom_ctrl = tas_ctrl - tas_ctrl.mean("time")
+        anom_sens = tas_sens - tas_sens.mean("time")
+        delta_tas = anom_sens - anom_ctrl  # auto-allineato sugli anni in comune
+
+        cov_ctrl = _load_cover(exp_ctrl, var)
+        cov_sens = _load_cover(exp_sens, var)
+        cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+        cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+        cov_anom_sens = cov_sens - cov_sens.mean("time")
+        delta_cover = cov_anom_sens - cov_anom_ctrl
+        # maschera i pixel dove delta_cover varia pochissimo (aree non vegetate):
+        # senza, lo slope esplode dividendo per una varianza vicina a zero
+        delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)
+
+        delta_tas, delta_cover = xr.align(delta_tas, delta_cover, join="inner")
+        if delta_tas.sizes.get("time", 0) < 3:
+            return f"{var} {lead} SALTATO: solo {delta_tas.sizes.get('time', 0)} anni in comune"
+
+        title = f"delta_tas_vs_delta_{var}_{lead}"
+        _map_and_box_regression(
+            delta_cover, delta_tas, title,
+            f"{save_path}/{title}_map.png", f"{save_path}/{title}_scatter.png",
+            f"{POST_DATA}/adapted_regression_{var}_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel=f"delta {var} (SENS-CTRL)", ylabel="delta tas (SENS-CTRL, K)",
+        )
+        return f"{var} {lead} ok ({delta_tas.sizes['time']} anni)"
+    except Exception as e:
+        return f"{var} {lead} ERRORE: {type(e).__name__}: {e}"
+
+
+def run_one_literal(args):
+    """Notebook 2: replica 06/06b/07, skill-vs-obs (obs cover = SENS)."""
+    exp_ctrl, exp_sens, var, era_var, y1, y2, save_path = args
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+    try:
+        # --- skill-vs-obs per la temperatura (obs = ERA5), come 06b ---
+        tas_ctrl = _load_tas_ensemble(exp_ctrl, lead)
+        tas_sens = _load_tas_ensemble(exp_sens, lead)
+        obs_tas = _era5_obs(era_var, lead_number)
+        tas_ctrl, obs_tas_c = xr.align(tas_ctrl, obs_tas, join="inner")
+        tas_sens, obs_tas_s = xr.align(tas_sens, obs_tas, join="inner")
+
+        anom_ctrl = tas_ctrl - tas_ctrl.mean("time")
+        anom_sens = tas_sens - tas_sens.mean("time")
+        anom_obs_c = obs_tas_c - obs_tas_c.mean("time")
+        anom_obs_s = obs_tas_s - obs_tas_s.mean("time")
+        skill_tas_ctrl = (anom_ctrl * anom_obs_c) / (tas_ctrl.std("time") * obs_tas_c.std("time"))
+        skill_tas_sens = (anom_sens * anom_obs_s) / (tas_sens.std("time") * obs_tas_s.std("time"))
+        skill_tas_ctrl, skill_tas_sens = xr.align(skill_tas_ctrl, skill_tas_sens, join="inner")
+        delta_tas = skill_tas_sens - skill_tas_ctrl
+
+        # --- skill-vs-obs per la cover (obs proxy = cover_SENS) ---
+        cov_ctrl = _load_cover(exp_ctrl, var)
+        cov_sens = _load_cover(exp_sens, var)  # anche usato come "obs"
+        cov_ctrl, cov_obs = xr.align(cov_ctrl, cov_sens, join="inner")
+        anom_cov_ctrl = cov_ctrl - cov_ctrl.mean("time")
+        anom_cov_obs = cov_obs - cov_obs.mean("time")
+        skill_cov_ctrl = (anom_cov_ctrl * anom_cov_obs) / (cov_ctrl.std("time") * cov_obs.std("time"))
+        # SENS vs se stesso: (anomalia_obs/std_obs)^2, non genuino skill previsivo
+        # (misura solo la struttura di varianza delle obs, non l'accordo con un
+        # dato indipendente) - circolare per costruzione, non banalmente = 1.
+        skill_cov_sens = (anom_cov_obs * anom_cov_obs) / (cov_obs.std("time") * cov_obs.std("time"))
+        skill_cov_ctrl, skill_cov_sens = xr.align(skill_cov_ctrl, skill_cov_sens, join="inner")
+        delta_cover = skill_cov_sens - skill_cov_ctrl
+
+        delta_tas, delta_cover = xr.align(delta_tas, delta_cover, join="inner")
+        if delta_tas.sizes.get("time", 0) < 3:
+            return f"{var} {lead} SALTATO: solo {delta_tas.sizes.get('time', 0)} anni in comune"
+
+        title = f"literal_delta_tas_vs_delta_{var}_{lead}"
+        _map_and_box_regression(
+            delta_cover, delta_tas, title,
+            f"{save_path}/{title}_map.png", f"{save_path}/{title}_scatter.png",
+            f"{POST_DATA}/literal_regression_{var}_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel=f"delta skill {var} (SENS-CTRL)", ylabel="delta skill tas (SENS-CTRL)",
+        )
+        return f"{var} {lead} ok ({delta_tas.sizes['time']} anni)"
+    except Exception as e:
+        return f"{var} {lead} ERRORE: {type(e).__name__}: {e}"
+
+
+def run_one_cover_albedo(args):
+    """X = delta_cover (non circolare, come Notebook 1/3). Y = delta_skill_albedo
+    (skill vs GLASS). A differenza della cover, l'albedo ha un'osservazione
+    indipendente vera: qui non serve nessun disegno ibrido, e' un confronto
+    skill-vs-skill pulito (genuino per entrambi SENS e CTRL), come lo schema
+    originale 06/07 applicato direttamente."""
+    exp_ctrl, exp_sens, var, y1, y2, save_path = args
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+    try:
+        # --- Y: delta skill albedo (vs GLASS, genuino per entrambi) ---
+        alb_ctrl = _load_albedo_ensemble(exp_ctrl, lead)
+        alb_sens = _load_albedo_ensemble(exp_sens, lead)
+        obs_alb = _glass_obs(lead_number)
+        alb_ctrl, obs_alb_c = xr.align(alb_ctrl, obs_alb, join="inner")
+        alb_sens, obs_alb_s = xr.align(alb_sens, obs_alb, join="inner")
+
+        anom_ctrl = alb_ctrl - alb_ctrl.mean("time")
+        anom_sens = alb_sens - alb_sens.mean("time")
+        anom_obs_c = obs_alb_c - obs_alb_c.mean("time")
+        anom_obs_s = obs_alb_s - obs_alb_s.mean("time")
+        skill_alb_ctrl = (anom_ctrl * anom_obs_c) / (alb_ctrl.std("time") * obs_alb_c.std("time"))
+        skill_alb_sens = (anom_sens * anom_obs_s) / (alb_sens.std("time") * obs_alb_s.std("time"))
+        skill_alb_ctrl, skill_alb_sens = xr.align(skill_alb_ctrl, skill_alb_sens, join="inner")
+        delta_skill_albedo = skill_alb_sens - skill_alb_ctrl
+
+        # --- X: delta cover (non circolare) ---
+        cov_ctrl = _load_cover(exp_ctrl, var)
+        cov_sens = _load_cover(exp_sens, var)
+        cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+        cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+        cov_anom_sens = cov_sens - cov_sens.mean("time")
+        delta_cover = cov_anom_sens - cov_anom_ctrl
+        delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)
+
+        delta_skill_albedo, delta_cover = xr.align(delta_skill_albedo, delta_cover, join="inner")
+        if delta_skill_albedo.sizes.get("time", 0) < 3:
+            return f"{var} {lead} SALTATO: solo {delta_skill_albedo.sizes.get('time', 0)} anni in comune"
+
+        title = f"cover_albedo_delta_skill_albedo_vs_delta_{var}_{lead}"
+        _map_and_box_regression_hybrid(
+            delta_cover, delta_skill_albedo, title,
+            f"{save_path}/{title}",
+            f"{POST_DATA}/cover_albedo_regression_{var}_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel=f"delta {var} (SENS-CTRL)", ylabel="delta skill albedo (SENS-CTRL, vs GLASS)",
+        )
+        return f"{var} {lead} ok ({delta_skill_albedo.sizes['time']} anni)"
+    except Exception as e:
+        return f"{var} {lead} ERRORE: {type(e).__name__}: {e}"
+
+
+def run_one_cover_snow(args):
+    """X = delta_cover (non circolare, come Notebook 1/3/4). Y = delta_skill_snow
+    (skill vs ERA5). Come l'albedo, la neve e' libera/prognostica in entrambi
+    gli esperimenti e ha un'osservazione indipendente vera: nessun disegno
+    ibrido necessario, skill-vs-skill pulito per entrambi SENS e CTRL. Stesso
+    schema di run_one_cover_albedo, variabile 'snd' al posto di 'alb'."""
+    exp_ctrl, exp_sens, var, y1, y2, save_path, snow_var = args
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+    try:
+        # --- Y: delta skill neve (vs ERA5, genuino per entrambi) ---
+        snow_ctrl = _load_snow_ensemble(exp_ctrl, lead, snow_var)
+        snow_sens = _load_snow_ensemble(exp_sens, lead, snow_var)
+        obs_snow = _era5_snow_obs(lead_number, snow_var)
+        snow_ctrl, obs_snow_c = xr.align(snow_ctrl, obs_snow, join="inner")
+        snow_sens, obs_snow_s = xr.align(snow_sens, obs_snow, join="inner")
+
+        anom_ctrl = snow_ctrl - snow_ctrl.mean("time")
+        anom_sens = snow_sens - snow_sens.mean("time")
+        anom_obs_c = obs_snow_c - obs_snow_c.mean("time")
+        anom_obs_s = obs_snow_s - obs_snow_s.mean("time")
+        skill_snow_ctrl = (anom_ctrl * anom_obs_c) / (snow_ctrl.std("time") * obs_snow_c.std("time"))
+        skill_snow_sens = (anom_sens * anom_obs_s) / (snow_sens.std("time") * obs_snow_s.std("time"))
+        skill_snow_ctrl, skill_snow_sens = xr.align(skill_snow_ctrl, skill_snow_sens, join="inner")
+        delta_skill_snow = skill_snow_sens - skill_snow_ctrl
+
+        # --- X: delta cover (non circolare) ---
+        cov_ctrl = _load_cover(exp_ctrl, var)
+        cov_sens = _load_cover(exp_sens, var)
+        cov_ctrl, cov_sens = xr.align(cov_ctrl, cov_sens, join="inner")
+        cov_anom_ctrl = cov_ctrl - cov_ctrl.mean("time")
+        cov_anom_sens = cov_sens - cov_sens.mean("time")
+        delta_cover = cov_anom_sens - cov_anom_ctrl
+        delta_cover = _mask_low_variance(delta_cover, threshold=1e-3)
+
+        delta_skill_snow, delta_cover = xr.align(delta_skill_snow, delta_cover, join="inner")
+        if delta_skill_snow.sizes.get("time", 0) < 3:
+            return f"{var} {lead} SALTATO: solo {delta_skill_snow.sizes.get('time', 0)} anni in comune"
+
+        title = f"cover_snow_delta_skill_{snow_var}_vs_delta_{var}_{lead}"
+        _map_and_box_regression_hybrid(
+            delta_cover, delta_skill_snow, title,
+            f"{save_path}/{title}",
+            f"{POST_DATA}/cover_snow_regression_{var}_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel=f"delta {var} (SENS-CTRL)", ylabel=f"delta skill {snow_var} (SENS-CTRL, vs ERA5)",
+        )
+        return f"{var} {lead} ok ({delta_skill_snow.sizes['time']} anni)"
+    except Exception as e:
+        return f"{var} {lead} ERRORE: {type(e).__name__}: {e}"
+
+
+def run_one_albedo_snow(args):
+    """X = delta_skill_albedo (vs GLASS), Y = delta_skill_snow (vs ERA5).
+    Confronto skill-vs-skill diretto: entrambe le variabili sono libere in
+    SENS e CTRL e hanno un'osservazione indipendente vera, nessuna circolarita'
+    e nessun trucco ibrido necessario (a differenza della cover). Nessuna
+    variabile 'var' da ciclare: un solo confronto per lead-year combo."""
+    exp_ctrl, exp_sens, y1, y2, save_path, snow_var = args
+    lead = f"{y1}-{y2}"
+    lead_number = y2 - y1 + 1
+    try:
+        # --- X: delta skill albedo (vs GLASS) ---
+        alb_ctrl = _load_albedo_ensemble(exp_ctrl, lead)
+        alb_sens = _load_albedo_ensemble(exp_sens, lead)
+        obs_alb = _glass_obs(lead_number)
+        alb_ctrl, obs_alb_c = xr.align(alb_ctrl, obs_alb, join="inner")
+        alb_sens, obs_alb_s = xr.align(alb_sens, obs_alb, join="inner")
+
+        anom_ctrl = alb_ctrl - alb_ctrl.mean("time")
+        anom_sens = alb_sens - alb_sens.mean("time")
+        anom_obs_c = obs_alb_c - obs_alb_c.mean("time")
+        anom_obs_s = obs_alb_s - obs_alb_s.mean("time")
+        skill_alb_ctrl = (anom_ctrl * anom_obs_c) / (alb_ctrl.std("time") * obs_alb_c.std("time"))
+        skill_alb_sens = (anom_sens * anom_obs_s) / (alb_sens.std("time") * obs_alb_s.std("time"))
+        skill_alb_ctrl, skill_alb_sens = xr.align(skill_alb_ctrl, skill_alb_sens, join="inner")
+        delta_skill_albedo = skill_alb_sens - skill_alb_ctrl
+
+        # --- Y: delta skill neve (vs ERA5) ---
+        snow_ctrl = _load_snow_ensemble(exp_ctrl, lead, snow_var)
+        snow_sens = _load_snow_ensemble(exp_sens, lead, snow_var)
+        obs_snow = _era5_snow_obs(lead_number, snow_var)
+        snow_ctrl, obs_snow_c = xr.align(snow_ctrl, obs_snow, join="inner")
+        snow_sens, obs_snow_s = xr.align(snow_sens, obs_snow, join="inner")
+
+        anom_ctrl_s = snow_ctrl - snow_ctrl.mean("time")
+        anom_sens_s = snow_sens - snow_sens.mean("time")
+        anom_obs_sc = obs_snow_c - obs_snow_c.mean("time")
+        anom_obs_ss = obs_snow_s - obs_snow_s.mean("time")
+        skill_snow_ctrl = (anom_ctrl_s * anom_obs_sc) / (snow_ctrl.std("time") * obs_snow_c.std("time"))
+        skill_snow_sens = (anom_sens_s * anom_obs_ss) / (snow_sens.std("time") * obs_snow_s.std("time"))
+        skill_snow_ctrl, skill_snow_sens = xr.align(skill_snow_ctrl, skill_snow_sens, join="inner")
+        delta_skill_snow = skill_snow_sens - skill_snow_ctrl
+
+        delta_skill_albedo, delta_skill_snow = xr.align(delta_skill_albedo, delta_skill_snow, join="inner")
+        if delta_skill_albedo.sizes.get("time", 0) < 3:
+            return f"{lead} SALTATO: solo {delta_skill_albedo.sizes.get('time', 0)} anni in comune"
+
+        title = f"albedo_snow_delta_skill_{snow_var}_vs_delta_skill_albedo_{lead}"
+        _map_and_box_regression_hybrid(
+            delta_skill_albedo, delta_skill_snow, title,
+            f"{save_path}/{title}",
+            f"{POST_DATA}/albedo_snow_regression_{LAT_MIN}_{LAT_MAX}_{LON_MIN}_{LON_MAX}_{lead}.nc",
+            xlabel="delta skill albedo (SENS-CTRL, vs GLASS)", ylabel=f"delta skill {snow_var} (SENS-CTRL, vs ERA5)",
+        )
+        return f"{lead} ok ({delta_skill_albedo.sizes['time']} anni)"
+    except Exception as e:
+        return f"{lead} ERRORE: {type(e).__name__}: {e}"
