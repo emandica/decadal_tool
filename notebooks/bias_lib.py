@@ -165,11 +165,12 @@ def plot_lead_years_bias(args):
 
         levels = [-0.5, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.5]
 
-        af.map_plot(dset_ctrl[var], dset_ctrl_p["p"], levels=levels, title="a) DCPP-CTRL", cmap="BrBG", antartica=False)
+        # p di ttest_1samp = bilaterale -> type="pvalue" (con "parametric" p alti sembravano significativi)
+        af.map_plot(dset_ctrl[var], dset_ctrl_p["p"], levels=levels, title="a) DCPP-CTRL", type="pvalue", cmap="BrBG", antartica=False)
         plt.savefig(f"{FIG_DIR}/{exp_ctrl}_{var}_lead_{lead}_bias.png", dpi=600, bbox_inches="tight")
         plt.close("all")
 
-        af.map_plot(dset_sens[var], dset_sens_p["p"], levels=levels, title="b) DCPP-SENS", cmap="BrBG", antartica=False)
+        af.map_plot(dset_sens[var], dset_sens_p["p"], levels=levels, title="b) DCPP-SENS", type="pvalue", cmap="BrBG", antartica=False)
         plt.savefig(f"{FIG_DIR}/{exp_sens}_{var}_lead_{lead}_bias.png", dpi=600, bbox_inches="tight")
         plt.close("all")
 

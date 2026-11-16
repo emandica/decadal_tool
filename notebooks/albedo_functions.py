@@ -685,7 +685,8 @@ def map_plot(ds, ds_p, levels, title=None, antartica=True, type='parametric', si
     levels (list): Contour levels for the plot.
     title (str, optional): Title for the plot. Defaults to None.
     antartica (bool, optional): Whether to include Antarctica in the plot. Defaults to True.
-    type (str, optional): Type of significance ('parametric' or 'quantile'). Defaults to 'parametric'.
+    type (str, optional): Type of significance ('parametric', 'quantile' or 'pvalue'). Defaults to 'parametric'.
+        Vedi significance_mask: 'pvalue' per i p-value bilaterali (linregress, ttest, pearson_r_p_value).
     sign (float, optional): Significance level (e.g., 0.95, 0.90). Defaults to 0.95.
     cmap (str, optional): Colormap for the plot. Defaults to 'Reds'.
 
@@ -747,11 +748,19 @@ def map_plot(ds, ds_p, levels, title=None, antartica=True, type='parametric', si
 def significance_mask(ds, ds_sign, type, sign, ax):
     """
     Plot significance markers on a map based on significance levels.
+    La 'x' marca i punti NON significativi (test bilaterale al livello 1 - sign).
 
     Parameters:
     ds (xarray.DataArray): Dataset to be checked for significance.
     ds_sign (xarray.DataArray or numpy.ndarray): Significance levels or quantiles.
-    type (str): Type of significance ('parametric' or 'quantile').
+    type (str): Type of significance ('parametric', 'quantile' or 'pvalue').
+        'parametric': ds_sign e' una CDF della statistica (es. scipy.stats.f.cdf),
+        il punto e' NON significativo se (1 - sign)/2 <= ds_sign <= 1 - (1 - sign)/2.
+        NON va usato con un p-value bilaterale: p alti sembrerebbero significativi.
+        'quantile': ds_sign sono i quantili della nulla (8 valori, da 0.005 a 0.995),
+        il punto e' NON significativo se ds cade dentro l'intervallo.
+        'pvalue': ds_sign e' un p-value bilaterale (es. xs.pearson_r_eff_p_value),
+        il punto e' NON significativo se p >= 1 - sign.
     sign (float): Significance level (e.g., 0.95, 0.90).
     ax (matplotlib.axes._subplots.AxesSubplot): Matplotlib axis with Cartopy projection.
 
@@ -773,6 +782,9 @@ def significance_mask(ds, ds_sign, type, sign, ax):
                 raise ValueError(f"Unsupported significance level: {sign}")
             min_v, max_v = indices[sign]
             signific = np.where((ds >= ds_sign[min_v, :, :]) & (ds <= ds_sign[max_v, :, :]))
+
+        elif type == 'pvalue':
+            signific = np.where(np.asarray(ds_sign) >= round(1 - sign, 10))
 #        elif type == 'interval':
 #            if sign not in indices:
 #                raise ValueError(f"Unsupported significance level: {sign}")

@@ -263,8 +263,9 @@ def _map_and_box_regression(delta_x, delta_y, title, png_map, png_scatter, nc_ou
         input_core_dims=[["time"], ["time"]],
         vectorize=True, output_dtypes=[float, float], output_core_dims=[[], []],
     )
+    # p di linregress = bilaterale -> type="pvalue": sign=0.90 vuol dire p < 0.10
     af.map_plot(slope_map, p_map, levels=_auto_levels(slope_map),
-               title=title, cmap="bwr", sign=0.90)
+               title=title, type="pvalue", cmap="bwr", sign=0.90)
     plt.savefig(png_map, dpi=300, bbox_inches="tight")
     plt.close("all")
 
@@ -335,18 +336,19 @@ def _map_and_box_regression_hybrid(delta_x, delta_y, title, png_base, nc_out, xl
         output_core_dims=[[], [], [], [], []],
     )
 
+    # p di linregress/spearmanr = bilaterali -> type="pvalue": sign=0.90 vuol dire p < 0.10
     af.map_plot(slope_map, p_map, levels=_auto_levels(slope_map),
-               title=f"{title} (Pearson, slope)", cmap="bwr", sign=0.90)
+               title=f"{title} (Pearson, slope)", type="pvalue", cmap="bwr", sign=0.90)
     plt.savefig(f"{png_base}_map_pearson.png", dpi=300, bbox_inches="tight")
     plt.close("all")
 
     af.map_plot(r_map, p_map, levels=[-1, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 1],
-               title=f"{title} (Pearson, r)", cmap="PuOr", sign=0.90)
+               title=f"{title} (Pearson, r)", type="pvalue", cmap="PuOr", sign=0.90)
     plt.savefig(f"{png_base}_map_pearson_r.png", dpi=300, bbox_inches="tight")
     plt.close("all")
 
     af.map_plot(rho_map, p_spear_map, levels=[-1, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 1],
-               title=f"{title} (Spearman, rho)", cmap="PuOr", sign=0.90)
+               title=f"{title} (Spearman, rho)", type="pvalue", cmap="PuOr", sign=0.90)
     plt.savefig(f"{png_base}_map_spearman.png", dpi=300, bbox_inches="tight")
     plt.close("all")
 

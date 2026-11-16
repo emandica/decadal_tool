@@ -53,14 +53,15 @@ def plot_bias_season(exp_ctrl, exp_sens, var, y1, y2, season, save_path):
         p_ctrl = _load(save_path, f"{exp_ctrl}_{var}_lead_{lead}_bias_p_{season}.nc", "p")
         p_sens = _load(save_path, f"{exp_sens}_{var}_lead_{lead}_bias_p_{season}.nc", "p")
 
+        # p di ttest_1samp = bilaterale -> type="pvalue" (con "parametric" p alti sembravano significativi)
         af.map_plot(bias_ctrl, p_ctrl, levels=LEVELS,
-                    title=f"a) DCPP-CTRL {season} {lead}", cmap="BrBG", antartica=False)
+                    title=f"a) DCPP-CTRL {season} {lead}", type="pvalue", cmap="BrBG", antartica=False)
         plt.savefig(f"{FIG_DIR}/{exp_ctrl}_{var}_bias_{season}_{lead}.png",
                     dpi=DPI, bbox_inches="tight")
         plt.close("all")
 
         af.map_plot(bias_sens, p_sens, levels=LEVELS,
-                    title=f"b) DCPP-SENS {season} {lead}", cmap="BrBG", antartica=False)
+                    title=f"b) DCPP-SENS {season} {lead}", type="pvalue", cmap="BrBG", antartica=False)
         plt.savefig(f"{FIG_DIR}/{exp_sens}_{var}_bias_{season}_{lead}.png",
                     dpi=DPI, bbox_inches="tight")
         plt.close("all")
