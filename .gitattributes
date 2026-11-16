@@ -1,0 +1,3 @@
+# Nel repo i file di testo vanno salvati con fine riga LF, qualunque git si usi
+# (anche uno senza core.autocrlf). Su Windows il checkout puo' restare CRLF.
+* text=auto
