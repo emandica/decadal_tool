@@ -53,6 +53,7 @@ while _cfg != os.path.dirname(_cfg):
 # HDF5/netCDF4 su NFS + processi: disabilita il file locking (prima di xarray)
 os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -219,6 +220,34 @@ def _cover_source(exp, var):
     raise ValueError(f"variabile di vegetazione sconosciuta: {var!r}")
 
 
+def _monthly_time(da, path):
+    """Riporta ogni media mensile al primo giorno del mese a cui si riferisce.
+
+    I file di SENS (nome con il periodo, es. ..._199311-201910_...) hanno 312
+    mesi, novembre 1993 - ottobre 2019, ma datati al primo giorno del mese
+    SUCCESSIVO (1993-12-01 ... 2019-11-01, la fine dell'intervallo di media;
+    verificato sul cluster il 2026-11-23). I file di CTRL sono datati a meta'
+    mese. Se il nome dichiara il periodo AAAAMM-AAAAMM, lo si usa come
+    riferimento: date coerenti col periodo -> si tiene il mese; date spostate
+    esattamente di un mese in avanti -> si riportano indietro di un mese;
+    altrimenti errore. Senza periodo nel nome si tiene il mese della data.
+    Ritorna (DataArray, True se le date sono state spostate)."""
+    months = pd.DatetimeIndex(pd.to_datetime(da["time"].values)).to_period("M")
+    if not months.is_unique or not months.is_monotonic_increasing:
+        raise ValueError(f"{Path(path).name}: mesi ripetuti o non ordinati")
+    shifted = False
+    m = re.search(r"_(\d{4})(\d{2})-(\d{4})(\d{2})", Path(path).name)
+    if m:
+        first = pd.Period(f"{m.group(1)}-{m.group(2)}", freq="M")
+        last = pd.Period(f"{m.group(3)}-{m.group(4)}", freq="M")
+        if months[0] == first + 1 and months[-1] == last + 1:
+            months, shifted = months - 1, True
+        elif not (months[0] == first and months[-1] == last):
+            raise ValueError(f"{Path(path).name}: le date vanno da {months[0]} a {months[-1]}, "
+                             f"il nome dichiara {first}-{last} (ne' uguali ne' spostate di un mese)")
+    return da.assign_coords(time=months.to_timestamp()), shifted
+
+
 def seasonal_series(da, season):
     """Media stagionale per anno da una serie mensile. Etichetta = anno del
     primo mese della stagione (dicembre per DJF), come i file del modello
@@ -233,17 +262,21 @@ def compute_cover_series(exp_ctrl, exp_sens, var, season, out_dir):
     """Salva <out_dir>/cover_<var>_<stagione>.nc con le serie stagionali per
     anno di CTRL e SENS (stessa griglia, anni in comune). Gli anni da usare
     si scelgono dopo, uguali a quelli del lead del modello con cui si confronta."""
-    series = {}
+    series, shifted = {}, []
     for role, exp in (("ctrl", exp_ctrl), ("sens", exp_sens)):
         path, name = _cover_source(exp, var)
         with xr.open_dataset(path) as ds:
             da = ds[name].squeeze(drop=True).load()
+        da, moved = _monthly_time(da, path)   # date di SENS spostate di un mese: vedi _monthly_time
+        if moved:
+            shifted.append(exp)
         series[role] = _fix_grid(_to_years(seasonal_series(da, season)))
     ctrl, sens = _common_grid(series["ctrl"], series["sens"], f"{var} {season} CTRL/SENS")
     years = np.intersect1d(ctrl["time"].values, sens["time"].values)
     ds = xr.Dataset({"ctrl": ctrl.sel(time=years).astype("float32"),
                      "sens": sens.sel(time=years).astype("float32")})
-    ds.attrs.update(var=var, season=season, exp_ctrl=exp_ctrl, exp_sens=exp_sens)
+    ds.attrs.update(var=var, season=season, exp_ctrl=exp_ctrl, exp_sens=exp_sens,
+                    date_spostate_indietro_di_un_mese=" ".join(shifted) or "nessuno")
     out = Path(out_dir) / f"cover_{var}_{season}.nc"
     ds.to_netcdf(out)
     return out
@@ -254,8 +287,10 @@ def run_one_cover(args):
     exp_ctrl, exp_sens, var, season, out_dir = args
     try:
         out = compute_cover_series(exp_ctrl, exp_sens, var, season, out_dir)
-        t = xr.open_dataset(out)["time"].values
-        return f"{var} {season} ok ({t.size} anni, {t.min()}-{t.max()}) -> {out.name}"
+        with xr.open_dataset(out) as ds:
+            t, moved = ds["time"].values, ds.attrs["date_spostate_indietro_di_un_mese"]
+        note = "" if moved == "nessuno" else f", date di {moved} indietro di un mese"
+        return f"{var} {season} ok ({t.size} anni, {t.min()}-{t.max()}{note}) -> {out.name}"
     except Exception as e:
         return f"{var} {season} ERRORE: {type(e).__name__}: {e}"
 
