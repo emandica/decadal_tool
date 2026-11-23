@@ -20,6 +20,7 @@ decadal_tool/
 │   ├── albedo_functions.py   # funzioni condivise (griglie, medie, maschere, bootstrap, plotting mappe)
 │   ├── bias_lib.py           # mappe di bias per combinazione di lead year (04-BIAS, 04-Fig4)
 │   ├── bias_leadyears_lib.py # bias globale per combinazione di lead year (03-Fig3)
+│   ├── preprocessing/        # dai file mensili ai file aggregati (per ora: stagionalizzazione, 03-decadal_season_aggregation)
 │   ├── NN-<nome>.ipynb       # notebook di CALCOLO   -> salva .nc intermedi
 │   ├── NN-FigN_<nome>.ipynb  # notebook di PLOTTING  -> genera le figure
 │   ├── seasons/              # varianti stagionali (DJF/MAM/JJA/SON), con i loro *_lib.py

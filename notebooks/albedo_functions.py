@@ -38,7 +38,7 @@ def fix_longitude(ds):
     return ds
 
 ##################################################################################
-def fix_monthly_time(da, path, return_shift=False):
+def fix_monthly_time(da, path, return_shift=False, verbose=True):
     """Data di ogni media mensile -> primo giorno del mese a cui si riferisce.
 
     I file di vegetazione di SENS con il periodo nel nome
@@ -59,7 +59,9 @@ def fix_monthly_time(da, path, return_shift=False):
     SENS e CTRL hanno date confrontabili anche in .sel(time=slice(...)).
 
     da: DataArray o Dataset con 'time'; path: il file da cui viene.
-    return_shift=True: ritorna anche True/False (date spostate o no)."""
+    return_shift=True: ritorna anche True/False (date spostate o no).
+    verbose=False: niente messaggio quando sposta le date (per chi apre
+    centinaia di file e conta da se' quelli corretti)."""
     name = Path(str(path)).name
     months = pd.DatetimeIndex(pd.to_datetime(da['time'].values)).to_period('M')
     if not months.is_unique or not months.is_monotonic_increasing:
@@ -71,7 +73,8 @@ def fix_monthly_time(da, path, return_shift=False):
         last = pd.Period(f'{m.group(3)}-{m.group(4)}', freq='M')
         if months[0] == first + 1 and months[-1] == last + 1:
             months, shifted = months - 1, True
-            print(f'{name}: date riportate indietro di un mese (erano datate al mese dopo)')
+            if verbose:
+                print(f'{name}: date riportate indietro di un mese (erano datate al mese dopo)')
         elif not (months[0] == first and months[-1] == last):
             raise ValueError(f'{name}: le date vanno da {months[0]} a {months[-1]}, il nome dichiara '
                              f'{first}-{last} (ne\' uguali ne\' spostate di un mese)')

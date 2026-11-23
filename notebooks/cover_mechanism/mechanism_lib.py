@@ -53,6 +53,7 @@ while _cfg != os.path.dirname(_cfg):
 # HDF5/netCDF4 su NFS + processi: disabilita il file locking (prima di xarray)
 os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -146,6 +147,14 @@ def load_model_season(exp, var, season, lead, start=START):
     files = model_files(exp, var, season, lead)
     if not files:
         raise FileNotFoundError(f"nessun file {exp} {var} {season} lead{lead} in {Path(WORK_DIR) / exp}")
+    # il realm nel nome e' libero: se la stagionalizzazione e' stata rifatta con
+    # un realm diverso, ci sarebbero due file per lo stesso membro (vecchio e nuovo)
+    names = [m.group(1) if (m := re.search(r"hindcast_(r\d+i\d+p\d+f\d+)_gr_1x1_lead", f.name)) else f.name
+             for f in files]
+    dup = sorted({n for n in names if names.count(n) > 1})
+    if dup:
+        raise ValueError(f"{exp} {var} {season} lead{lead}: piu' file per i membri {dup} "
+                         f"(realm diversi nel nome?): {[f.name for f in files if f.name.find(dup[0]) >= 0]}")
     ds = xr.open_mfdataset(files, concat_dim="member", combine="nested", chunks="auto")
     da = ds[var].load()
     ds.close()
