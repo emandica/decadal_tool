@@ -47,8 +47,8 @@ Ogni figura nasce da una **coppia** di notebook:
 
 | Figura | Notebook di plotting | Contenuto |
 |--------|----------------------|-----------|
-| Fig. 1 | `01-Fig1_lai_std` · `01-Fig1_effective_lai_std` · `01-Fig1_cv_std` | Deviazione standard interannuale di LAI / LAI efficace / vegetation cover |
-| Fig. 2 | `02-Fig2_lai_trend` · `02-Fig2_effective_lai_trend` · `02-Fig2_cv_trend` | Trend delle stesse variabili |
+| Fig. 1 | `01-Fig1_lai_std` · `01-Fig1_cv_std` (calcolo: `01-vegetation_std`) | Deviazione standard interannuale di LAI e vegetation cover |
+| Fig. 2 | `02-Fig2_lai_trend` · `02-Fig2_cv_trend` (calcolo: `02-vegetation_trend`) | Trend delle stesse variabili |
 | Fig. 3 | `03-Fig3_global_bias_tas` | Bias globale della temperatura (tas) |
 | Fig. 4 | `04-Fig4_BIAS_plot` (calcolo: `04-BIAS`) | Mappe di bias |
 | Fig. 5 | `05-Serie_temporale_anomalie` · `05-Fig5_global_acc` (calcolo: `05-global_acc`) | Serie temporali delle anomalie / ACC di media d'area per lead time e per combinazioni di lead year (con significatività bootstrap) |
