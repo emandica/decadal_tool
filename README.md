@@ -24,6 +24,7 @@ decadal_tool/
 │   ├── NN-FigN_<nome>.ipynb  # notebook di PLOTTING  -> genera le figure
 │   ├── seasons/              # varianti stagionali (DJF/MAM/JJA/SON), con i loro *_lib.py
 │   ├── cover_regression/     # regressioni delta cover / albedo / neve vs delta skill (+ seasons/)
+│   ├── cover_mechanism/      # vegetazione -> albedo -> temperatura: differenze di stato medio SENS - CTRL
 │   └── altre_figure/         # figure supplementari
 └── figures/               # figure finali della pubblicazione (PNG)
 ```
@@ -54,6 +55,7 @@ Ogni figura nasce da una **coppia** di notebook:
 | Fig. 5 | `05-Serie_temporale_anomalie` · `05-Fig5_global_acc` (calcolo: `05-global_acc`) | Serie temporali delle anomalie / ACC di media d'area per lead time e per combinazioni di lead year (con significatività bootstrap) |
 | Mappe ACC | `ACC_plot` (calcolo: `yearly_ACC_calculation` · `seasonal_ACC_calculation`) | Mappe spaziali di ACC (anomaly correlation) con significatività bootstrap; `seasonal_ACC_calculation` disegna anche le mappe con correzione FDR |
 | Regressioni | `cover_regression/01`–`07` (calcolo e figure nello stesso notebook) | Delta skill (tas, albedo, neve) vs delta cover (cvh, cvl, cvt = cvh + cvl), albedo vs neve: mappe di slope / r per pixel e scatter sul box Siberia; figure in una sottocartella per notebook |
+| Meccanismo | `cover_mechanism/01-Fig_mean_state_delta` (calcolo: `01-mean_state_delta`) | Differenze di stato medio SENS − CTRL per stagione e lead (vegetazione, albedo, neve, tas): mappe, relazioni tra pixel per classi di Δcover (con / senza neve, fasce di latitudine, box Siberia) con intervalli bootstrap, coerenza tra lead |
 | Suppl. | `altre_figure/`, `seasons/` | Cover, LAI e varianti stagionali |
 
 > I notebook seguono in gran parte la convenzione `NN-<nome>` (calcolo) + `NN-FigN_<nome>`
