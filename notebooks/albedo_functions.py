@@ -5,7 +5,9 @@ import xskillscore as xs
 import dask
 from scipy import stats
 
+import re
 import warnings
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
@@ -34,7 +36,55 @@ def fix_longitude(ds):
         ds = ds.assign_coords({lon_name: (((ds[lon_name] + 180) % 360) - 180)})
         ds = ds.sortby(lon_name)
     return ds
-    
+
+##################################################################################
+def fix_monthly_time(da, path, return_shift=False):
+    """Data di ogni media mensile -> primo giorno del mese a cui si riferisce.
+
+    I file di vegetazione di SENS con il periodo nel nome
+    (a52o_effective_cvh_199311-201910_1x1.nc,
+    original_resolution/lai_hv/a52o_lai_hv_199311-201910_1x1.nc, ...) hanno 312
+    medie mensili, novembre 1993 - ottobre 2019, ma datate al primo giorno del
+    mese SUCCESSIVO (1993-12-01 ... 2019-11-01, cioe' la fine dell'intervallo;
+    verificato sul cluster il 2026-11-23). Quelli di CTRL (a1ua_effective_*,
+    icmcl_a1ua_regular_1x1.nc) sono datati a meta' mese. Senza correzione ogni
+    selezione per mese (stagioni, anni, inizio al 1999) legge SENS un mese
+    avanti rispetto a CTRL: il "DJF" di SENS sarebbe nov-gen.
+
+    Se il nome del file dichiara il periodo (AAAAMM-AAAAMM) lo si usa come
+    riferimento: date coerenti col periodo -> si tiene il mese; spostate
+    esattamente di un mese in avanti -> indietro di un mese; altrimenti errore
+    (meglio fermarsi che indovinare). Senza periodo nel nome si tiene il mese
+    della data. In ogni caso la data diventa il primo giorno del mese, cosi'
+    SENS e CTRL hanno date confrontabili anche in .sel(time=slice(...)).
+
+    da: DataArray o Dataset con 'time'; path: il file da cui viene.
+    return_shift=True: ritorna anche True/False (date spostate o no)."""
+    name = Path(str(path)).name
+    months = pd.DatetimeIndex(pd.to_datetime(da['time'].values)).to_period('M')
+    if not months.is_unique or not months.is_monotonic_increasing:
+        raise ValueError(f'{name}: mesi ripetuti o non ordinati')
+    shifted = False
+    m = re.search(r'_(\d{4})(\d{2})-(\d{4})(\d{2})', name)
+    if m:
+        first = pd.Period(f'{m.group(1)}-{m.group(2)}', freq='M')
+        last = pd.Period(f'{m.group(3)}-{m.group(4)}', freq='M')
+        if months[0] == first + 1 and months[-1] == last + 1:
+            months, shifted = months - 1, True
+            print(f'{name}: date riportate indietro di un mese (erano datate al mese dopo)')
+        elif not (months[0] == first and months[-1] == last):
+            raise ValueError(f'{name}: le date vanno da {months[0]} a {months[-1]}, il nome dichiara '
+                             f'{first}-{last} (ne\' uguali ne\' spostate di un mese)')
+    out = da.assign_coords(time=months.to_timestamp())
+    return (out, shifted) if return_shift else out
+
+
+def open_monthly(path, var, **kwargs):
+    """xr.open_dataset(path, **kwargs)[var] con le date sistemate da
+    fix_monthly_time. Da usare per i file mensili di vegetazione (cover
+    efficace, LAI) di SENS e CTRL."""
+    return fix_monthly_time(xr.open_dataset(path, **kwargs)[var], path)
+
 ##################################################################################
 def domain_selection(var, lat_min, lat_max, lon_min, lon_max):
 #select domain

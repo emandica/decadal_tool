@@ -140,7 +140,9 @@ def _load_cover(exp, var):
         fname = f"{exp}_effective_{var}_1x1.nc"
     else:
         fname = f"{exp}_effective_{var}_199311-201910_1x1.nc"
-    da = xr.open_dataset(POST_DATA / fname)[var]
+    # af.open_monthly: le date di SENS sono al primo giorno del mese dopo,
+    # riportate al mese giusto (vedi af.fix_monthly_time)
+    da = af.open_monthly(POST_DATA / fname, var)
     da = da.assign_coords(time=pd.to_datetime(da["time"].values).year)
     # media annuale: la serie e' mensile, il confronto con tas e' per anno
     da = da.groupby("time").mean("time")

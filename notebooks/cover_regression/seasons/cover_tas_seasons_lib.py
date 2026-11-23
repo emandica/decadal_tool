@@ -95,7 +95,10 @@ def _seasonal_cover(exp, var, season):
         fname = f"{exp}_effective_{var}_1x1.nc"
     else:
         fname = f"{exp}_effective_{var}_199311-201910_1x1.nc"
-    da = xr.open_dataset(POST_DATA / fname)[var]
+    # af.open_monthly: le date di SENS sono al primo giorno del mese dopo,
+    # riportate al mese giusto (vedi af.fix_monthly_time); senza, le stagioni
+    # di SENS sarebbero sfasate di un mese rispetto a CTRL
+    da = af.open_monthly(POST_DATA / fname, var)
     resampled = da.resample(time="QS-DEC").mean("time")
     start_month = SEASON_START_MONTH[season]
     seasonal = resampled.sel(time=resampled["time"].dt.month == start_month)

@@ -53,7 +53,6 @@ while _cfg != os.path.dirname(_cfg):
 # HDF5/netCDF4 su NFS + processi: disabilita il file locking (prima di xarray)
 os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
-import re
 from pathlib import Path
 
 import numpy as np
@@ -221,31 +220,11 @@ def _cover_source(exp, var):
 
 
 def _monthly_time(da, path):
-    """Riporta ogni media mensile al primo giorno del mese a cui si riferisce.
-
-    I file di SENS (nome con il periodo, es. ..._199311-201910_...) hanno 312
-    mesi, novembre 1993 - ottobre 2019, ma datati al primo giorno del mese
-    SUCCESSIVO (1993-12-01 ... 2019-11-01, la fine dell'intervallo di media;
-    verificato sul cluster il 2026-11-23). I file di CTRL sono datati a meta'
-    mese. Se il nome dichiara il periodo AAAAMM-AAAAMM, lo si usa come
-    riferimento: date coerenti col periodo -> si tiene il mese; date spostate
-    esattamente di un mese in avanti -> si riportano indietro di un mese;
-    altrimenti errore. Senza periodo nel nome si tiene il mese della data.
-    Ritorna (DataArray, True se le date sono state spostate)."""
-    months = pd.DatetimeIndex(pd.to_datetime(da["time"].values)).to_period("M")
-    if not months.is_unique or not months.is_monotonic_increasing:
-        raise ValueError(f"{Path(path).name}: mesi ripetuti o non ordinati")
-    shifted = False
-    m = re.search(r"_(\d{4})(\d{2})-(\d{4})(\d{2})", Path(path).name)
-    if m:
-        first = pd.Period(f"{m.group(1)}-{m.group(2)}", freq="M")
-        last = pd.Period(f"{m.group(3)}-{m.group(4)}", freq="M")
-        if months[0] == first + 1 and months[-1] == last + 1:
-            months, shifted = months - 1, True
-        elif not (months[0] == first and months[-1] == last):
-            raise ValueError(f"{Path(path).name}: le date vanno da {months[0]} a {months[-1]}, "
-                             f"il nome dichiara {first}-{last} (ne' uguali ne' spostate di un mese)")
-    return da.assign_coords(time=months.to_timestamp()), shifted
+    """Riporta ogni media mensile al primo giorno del mese a cui si riferisce
+    (i file di SENS sono datati al primo giorno del mese dopo): vedi
+    af.fix_monthly_time, condivisa con gli altri notebook che leggono questi
+    file. Ritorna (DataArray, True se le date sono state spostate)."""
+    return af.fix_monthly_time(da, path, return_shift=True)
 
 
 def seasonal_series(da, season):
