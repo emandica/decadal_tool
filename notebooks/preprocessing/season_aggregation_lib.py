@@ -15,6 +15,10 @@ Portato da decadal_tool/decadal/00-process_2025/03-decadal_season_aggregation
    ne mancava uno, la finestra scivolava sugli anni dopo).
 3. Esecuzione in processi spawn freschi (multiprocessing.Pool,
    maxtasksperchild=1) come nel resto del repo, invece di ProcessPoolExecutor.
+4. Ogni file mensile deve contenere la variabile richiesta (var), altrimenti
+   errore; nei file in uscita c'e' solo quella variabile. L'originale
+   stagionalizzava qualunque contenuto: nella cartella alb del cluster ci
+   sono file con 'bb_albedo' e valori non fisici per l'albedo del modello.
 
 Per il resto stessi passaggi e stessi nomi di file dell'originale, cosi' i
 notebook che li leggono (seasons/, cover_mechanism/) non cambiano. In
@@ -88,13 +92,24 @@ def monthly_file(exp, var, start, member, year):
     return found[0] if found else None
 
 
-def seasonal_means(path):
-    """Medie stagionali di un file mensile nov-ott: (dict stagione -> Dataset
-    con un solo tempo, True se le date sono state spostate)."""
+def _check_variable(ds, var, path):
+    """Il file deve contenere la variabile 'var'. Errore altrimenti: nella
+    cartella monthly_start_dates/alb del cluster ci sono file con la
+    variabile 'bb_albedo' (nome di GLASS) e un andamento non fisico per
+    l'albedo del modello (2026-11-23); senza questo controllo verrebbero
+    stagionalizzati e sovrascriverebbero i file buoni."""
+    if var not in ds.data_vars:
+        raise ValueError(f"{Path(path).name}: manca la variabile '{var}' "
+                         f"(il file contiene {list(ds.data_vars)}): non e' il file atteso, fermarsi e controllare")
+
+
+def seasonal_means(path, var):
+    """Medie stagionali della variabile 'var' di un file mensile nov-ott:
+    (dict stagione -> Dataset con un solo tempo, True se le date sono state
+    spostate)."""
     with xr.open_dataset(path) as ds:
-        ds = ds.load()
-    # limiti temporali e di griglia: non servono e la media di date non ha senso
-    ds = ds.drop_vars([v for v in ds.data_vars if "bnds" in v or "bounds" in v])
+        _check_variable(ds, var, path)
+        ds = ds[[var]].load()      # solo la variabile (senza limiti temporali e di griglia)
     ds, shifted = af.fix_monthly_time(ds, path, return_shift=True, verbose=False)
     months = ds["time"].dt.month.values
     if ds.sizes["time"] != 12 or months[0] != 11:
@@ -139,6 +154,7 @@ def check_inputs(exp, var, start_years, members):
     print("   " + "  ".join(counts))
     if example is not None:
         with xr.open_dataset(example) as ds:
+            _check_variable(ds, var, example)   # si ferma qui, prima di calcolare
             t = ds["time"].values
         _, shifted = af.fix_monthly_time(xr.Dataset(coords={"time": t}), example, return_shift=True, verbose=False)
         print(f"   esempio {example.name}: date {str(t[0])[:10]} ... {str(t[-1])[:10]} -> "
@@ -166,7 +182,7 @@ def run_member(args):
                 if f is None:
                     missing.append(f"s{i}/{a}")
                     continue
-                means, shifted = seasonal_means(f)
+                means, shifted = seasonal_means(f, var)
                 n_files += 1
                 n_shift += shifted
                 for season, ds in means.items():
